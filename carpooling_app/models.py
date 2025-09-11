@@ -1,6 +1,6 @@
 from django.db import models
 
-class Person(models.Model):
+class User(models.Model):
     user_id = models.AutoField(primary_key=True)
     username = models.CharField(max_length=15, unique=True)
     first_name = models.CharField(max_length=15)
@@ -12,17 +12,15 @@ class Person(models.Model):
     role = models.CharField(max_length=20, choices=[("admin", "Admin"), ("driver", "Driver"), ("passenger", "Passenger")], default="passenger")
     is_active = models.BooleanField(default=False)
     address = models.TextField(null=True, blank=True)
-
-    REQUIRED_FIELDS = ['username', 'first_name', 'email', 'password']
-
+    
     def __str__(self):
-        return self.username
+        return f"{self.user_id} ({self.username})"
 
 
 # Journey / Create Car Pool
 class CreateCarpool(models.Model):
     createcarpool_id = models.AutoField(primary_key=True)
-    carpool_creator_driver = models.ForeignKey(Person, on_delete=models.CASCADE, related_name="journeys")
+    carpool_creator_driver = models.ForeignKey(User, on_delete=models.CASCADE, related_name="journeys")
     start_location = models.CharField(max_length=255)
     end_location = models.CharField(max_length=255)
     departure_time = models.DateTimeField()
@@ -42,11 +40,11 @@ class CreateCarpool(models.Model):
 class Booking(models.Model):
     booking_id = models.AutoField(primary_key=True)
     fkCreateCarpool = models.ForeignKey(CreateCarpool, on_delete=models.CASCADE, related_name="bookings")
-    passenger_name = models.ForeignKey(Person, on_delete=models.CASCADE, related_name="passenger_bookings")
+    passenger_name = models.ForeignKey(User, on_delete=models.CASCADE, related_name="passenger_bookings")
     seat_book = models.PositiveIntegerField(default=1)
     contribution_amount = models.DecimalField(max_digits=10, decimal_places=2)
     booking_status = models.CharField(max_length=20, choices=[("pending", "Pending"), ("confirmed", "Confirmed"), ("cancelled", "Cancelled")], default="pending")
-    booked_by = models.ForeignKey(Person, on_delete=models.CASCADE)
+    booked_by = models.ForeignKey(User, on_delete=models.CASCADE)
     booked_at = models.DateTimeField(auto_now_add=True)
     pickup_location = models.CharField(max_length=255, null=True, blank=True)
     drop_location = models.CharField(max_length=255, null=True, blank=True)
@@ -58,7 +56,7 @@ class Booking(models.Model):
 ## Model for activity log (Foreignkey used -->> User)
 class Activity(models.Model):
     date_time = models.DateTimeField(auto_now_add=True)
-    user = models.ForeignKey(Person, on_delete=models.SET_NULL,null=True, blank=True)
+    user = models.ForeignKey(User, on_delete=models.SET_NULL,null=True, blank=True)
     details = models.CharField(max_length=255)
 
     def __str__(self):
@@ -71,7 +69,7 @@ class Transaction(models.Model):
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     payment_status = models.CharField(max_length=20,choices=[("pending", "Pending"), ("paid", "Paid"), ("failed", "Failed")],default="pending")
     created_at = models.DateTimeField(auto_now_add=True)
-    created_by = models.ForeignKey(Person, on_delete=models.CASCADE)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE)
 
     def __str__(self):
         return f"Transaction {self.transaction_id} - {self.payment_status}"

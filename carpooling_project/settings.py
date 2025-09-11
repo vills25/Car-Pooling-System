@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+from datetime import timedelta
 from pathlib import Path
 import os
 
@@ -47,24 +48,20 @@ INSTALLED_APPS = [
 
 #############################################################################################
 
-# AUTH_USER_MODEL = 'carpooling_app.Person'
-
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework.authentication.SessionAuthentication', 
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'carpooling_app.custom_jwt_auth.CustomJWTAuthentication',  # Use custom authentication
     ),
-
-    'DATETIME_FORMAT': "%d-%m-%Y %H:%M:%S",
-    }
-
-#Token handle   
-from datetime import timedelta
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
+}
 
 SIMPLE_JWT = {
     "USER_ID_FIELD": "user_id",
-    'ACCESS_TOKEN_LIFETIME': timedelta(days=1),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
+    "USER_ID_CLAIM": "user_id",
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=24),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=30),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
     'AUTH_HEADER_TYPES': ('Bearer',),
