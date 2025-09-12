@@ -17,7 +17,12 @@ urlpatterns = [
 
     #-------- CREATE CARPOOL --------#
     path('create_carpool/', create_carpool),
-
+    path('update_carpool/', update_carpool),
+    path('delete_carpool/', delete_carpool),
+    path('view_my_carpools/', view_my_carpools),
+    path("carpool_detail/",carpool_detail),
+    path("search_carpools/",search_carpools),
+    path("sort_carpools_by/",sort_carpools_by),
 
     #-------- FIND & BOOK CARPOOL --------#
 

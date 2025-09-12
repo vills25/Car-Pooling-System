@@ -17,18 +17,18 @@ from django.db import transaction
 from django.contrib.auth.hashers import make_password
 from .custom_jwt_auth import IsAuthenticatedCustom
 
-# Save activity log
+## Save activity log
 def activity(user, details):
     try:
         Activity.objects.create(user=user, details=details)
     except Exception as e:
         print("Activity log failed:", str(e))
 
-# Generate random OTP (6 digit)
+## Generate random OTP (6 digit)
 def generate_otp():
     return str(random.randint(100000, 999999))
 
-# Send OTP email
+## Send OTP email
 def send_otp_email(email, otp):
     subject = "Your OTP Code"
     message = f"Your OTP for password reset is: {otp}. It will expire in 10 minutes."
@@ -40,7 +40,7 @@ def send_otp_email(email, otp):
         print("Email send failed:", str(e))
         return False
 
-## Register(Sign-Up)
+## Register User (Sign-Up)
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def register_user(request):
@@ -84,8 +84,7 @@ def register_user(request):
     except Exception as e:
         return Response({"status":"error","message":str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-
-# Login(Sign-In)
+## Login User (Sign-In)
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def login_user(request):
@@ -124,8 +123,7 @@ def login_user(request):
     except Exception as e:
         return Response({"status":"error", "message": str(e)}, status= status.HTTP_400_BAD_REQUEST)
 
-
-## View profile data
+## VIEW User profile data
 @api_view(['POST'])
 @permission_classes([IsAuthenticatedCustom])
 def view_profile(request):
@@ -150,43 +148,55 @@ def view_profile(request):
     except Exception as e:
         return Response({"status":"error", "message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-
+## UPDATE User profile view
 @api_view(['PUT'])
 @permission_classes([IsAuthenticatedCustom])
 def update_profile(request):
     try:
-
         user = request.user
-        request_data = request.data
+        
+        # Extract all input fields
+        get_username = request.data.get('username')
+        get_email = request.data.get('email')
+        get_password = request.data.get('password')
+        get_first_name = request.data.get('first_name')
+        get_last_name = request.data.get('last_name')
+        get_phone_number = request.data.get('phone_number')
+        get_address = request.data.get('address')
+        get_role = request.data.get('role')
+        get_profile_pic = request.FILES.get('profile_pic')
 
         with transaction.atomic():
-            if 'username' in request_data:
-                if User.objects.filter(username=request_data['username']).exclude(user_id=user.user_id).exists():
+            if get_username is not None:
+                if User.objects.filter(username=get_username).exclude(user_id=user.user_id).exists():
                     return Response({"status":"fail", "message": "Username already taken"}, status=status.HTTP_400_BAD_REQUEST)
-                user.username = request_data['username']
+                user.username = get_username
 
-            if 'email' in request_data:
-                if User.objects.filter(email=request_data['email']).exclude(user_id=user.user_id).exists():
+            if get_email is not None:
+                if User.objects.filter(email=get_email).exclude(user_id=user.user_id).exists():
                     return Response({"status":"fail", "message": "Email already registered"}, status=status.HTTP_400_BAD_REQUEST)
-                user.email = request_data['email']
+                user.email = get_email
 
-            if 'password' in request_data:
-                user.password = make_password(request_data['password'])
+            if get_password is not None:
+                user.password = make_password(get_password)
 
-            if 'first_name' in request_data:
-                user.first_name = request_data['first_name']
+            if get_first_name is not None:
+                user.first_name = get_first_name
 
-            if 'last_name' in request_data:
-                user.last_name = request_data['last_name']
+            if get_last_name is not None:
+                user.last_name = get_last_name
 
-            if 'phone_number' in request_data:
-                user.phone_number = request_data['phone_number']
+            if get_phone_number is not None:
+                user.phone_number = get_phone_number
 
-            if 'address' in request_data:
-                user.address = request_data['address']
+            if get_address is not None:
+                user.address = get_address
 
-            if request.FILES.get('profile_pic'):
-                user.profile_pic = request.FILES['profile_pic']
+            if get_role is not None:
+                user.role = get_role
+
+            if get_profile_pic is not None:
+                user.profile_pic = get_profile_pic
 
             user.save()
 
@@ -196,7 +206,8 @@ def update_profile(request):
 
     except Exception as e:
         return Response({"status":"error", "message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-    
+
+## DELETE User profile view    
 @api_view(['DELETE'])
 @permission_classes([IsAuthenticatedCustom])
 def delete_profile(request):
@@ -219,7 +230,7 @@ def delete_profile(request):
     except User.DoesNotExist:
         return Response({"status":"fail", "message": "User not found"}, status= status.HTTP_404_NOT_FOUND)
 
-## FORGOT password view
+## FORGOT User password view
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def forgot_password(request):
@@ -239,7 +250,7 @@ def forgot_password(request):
     except User.DoesNotExist:
         return Response({"status":"fail","message":"User not found"}, status=status.HTTP_404_NOT_FOUND)
 
-## RESET password
+## RESET User password
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def reset_password(request):
@@ -260,4 +271,3 @@ def reset_password(request):
         return Response({"status":"success","message":"Password reset successfully"}, status=status.HTTP_200_OK)
     except User.DoesNotExist:
         return Response({"status":"fail","message":"User not found"}, status=status.HTTP_404_NOT_FOUND)
-

@@ -1,5 +1,6 @@
 from django.db import models
 
+## Model for User Detail(Driver/Passanger)
 class User(models.Model):
     user_id = models.AutoField(primary_key=True)
     username = models.CharField(max_length=15, unique=True)
@@ -16,8 +17,7 @@ class User(models.Model):
     def __str__(self):
         return f"{self.user_id} ({self.username})"
 
-
-# Journey / Create Car Pool
+# Model for Create Carpool
 class CreateCarpool(models.Model):
     createcarpool_id = models.AutoField(primary_key=True)
     carpool_creator_driver = models.ForeignKey(User, on_delete=models.CASCADE, related_name="journeys")
@@ -28,13 +28,14 @@ class CreateCarpool(models.Model):
     available_seats = models.IntegerField()
     contribution_per_passenger = models.DecimalField(max_digits=10, decimal_places=2)
     add_note = models.TextField(blank=True, null=True)
-    created_at = models.DateTimeField(auto_now_add=True)
     total_passenger_allowed = models.PositiveIntegerField()
     contact_info = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
+    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name="updated_carpool")
 
     def __str__(self):
         return self.carpool_creator_driver.username
-
 
 # Booking (Passenger joins Journey)
 class Booking(models.Model):
@@ -48,7 +49,8 @@ class Booking(models.Model):
     booked_at = models.DateTimeField(auto_now_add=True)
     pickup_location = models.CharField(max_length=255, null=True, blank=True)
     drop_location = models.CharField(max_length=255, null=True, blank=True)
-
+    updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
+    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name="updated_booking")
 
     def __str__(self):
         return self.booking_id
@@ -60,9 +62,9 @@ class Activity(models.Model):
     details = models.CharField(max_length=255)
 
     def __str__(self):
-        return f'{self.user}----{self.date_time}----{self.Details}'
+        return f'{self.user}----{self.date_time}----{self.details}'
 
-
+## Model for keep records of transactions
 class Transaction(models.Model):
     transaction_id = models.AutoField(primary_key=True)
     booking = models.OneToOneField(Booking, on_delete=models.CASCADE, related_name="transaction")
