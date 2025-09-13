@@ -45,15 +45,17 @@ class Booking(models.Model):
     seat_book = models.PositiveIntegerField(default=1)
     contribution_amount = models.DecimalField(max_digits=10, decimal_places=2)
     booking_status = models.CharField(max_length=20, choices=[("pending", "Pending"), ("confirmed", "Confirmed"), ("cancelled", "Cancelled")], default="pending")
+    ride_status = models.CharField(max_length=20, choices=[("upcomming","Upcomming"), ("active", "Active"), ("completed", "Completed"),("cancelled","Cancelled")], default="upcomming")
     booked_by = models.ForeignKey(User, on_delete=models.CASCADE)
     booked_at = models.DateTimeField(auto_now_add=True)
     pickup_location = models.CharField(max_length=255, null=True, blank=True)
     drop_location = models.CharField(max_length=255, null=True, blank=True)
+    contact_info = models.TextField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
     updated_by = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name="updated_booking")
 
     def __str__(self):
-        return self.booking_id
+        return self.passenger_name.username
     
 ## Model for activity log (Foreignkey used -->> User)
 class Activity(models.Model):

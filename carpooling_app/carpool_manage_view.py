@@ -9,6 +9,7 @@ from .models import CreateCarpool
 from .serializers import CreateCarpoolSerializer
 from .user_authentication import activity
 from django.db.models import Sum
+from rest_framework.permissions import AllowAny
 
 ## Create Carpool (driver only)
 @api_view(['POST'])
@@ -27,10 +28,6 @@ def create_carpool(request):
     add_note = request.data.get('add_note', '')
     arrival_time = request.data.get('arrival_time')
     contact_info = request.data.get('contact_info', '')
-
-    # check if carpool creator is Driver.
-    if user.role != "driver":
-        return Response({"status":"fail","message":"Only drivers can create carpools"}, status=status.HTTP_403_FORBIDDEN)
 
     # required fields
     required = ["start_location", "end_location", "departure_time", "available_seats", "total_passenger_allowed"]
@@ -68,6 +65,10 @@ def create_carpool(request):
                 total_passenger_allowed = total_allowed,
                 contact_info = contact_info
             )
+            user_role_change = user
+            if user_role_change.role != "driver":
+                user_role_change.role = "driver"
+                user_role_change.save()
 
             serializer = CreateCarpoolSerializer(carpool)
             return Response({"status":"success", "message":"Carpool added", "Carpool data": serializer.data}, status=status.HTTP_201_CREATED)
@@ -192,9 +193,9 @@ def view_my_carpools(request):
     user = request.user
     
     try:
-        now = timezone.now()
-        upcoming_carpool = CreateCarpool.objects.filter(carpool_creator_driver=user, departure_time__gte=now).order_by("departure_time")
-        past_carpool = CreateCarpool.objects.filter(carpool_creator_driver=user, departure_time__lt=now).order_by("-departure_time")
+        currunt_time = timezone.now()
+        upcoming_carpool = CreateCarpool.objects.filter(carpool_creator_driver=user, departure_time__gte=currunt_time).order_by("departure_time")
+        past_carpool = CreateCarpool.objects.filter(carpool_creator_driver=user, departure_time__lt=currunt_time).order_by("-departure_time")
         both_data = {
             "upcoming_carpool": CreateCarpoolSerializer(upcoming_carpool, many=True).data,
             "past_carpool": CreateCarpoolSerializer(past_carpool, many=True).data
@@ -204,44 +205,34 @@ def view_my_carpools(request):
     except Exception as e:
         return Response({"status":"error","message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-# Carpool detail (public if upcoming or owner/participant)
-@api_view(['POST'])
-@permission_classes([IsDriverCustom])
+# Carpool list (public)
+@api_view(['GET'])
+@permission_classes([AllowAny])
 def carpool_detail(request):
-
-    carpool_id = request.data.get("createcarpool_id")
-
-    if not carpool_id:
-        return Response({"status":"fail","message":"createcarpool_id is required"}, status=status.HTTP_400_BAD_REQUEST)
     try:
-        carpool = CreateCarpool.objects.get(createcarpool_id=carpool_id)
-        now = timezone.now()
-    
-        is_owner = (carpool.carpool_creator_driver == request.user)
-        is_booked = carpool.bookings.filter(passenger_name=request.user).exists()
-        if carpool.departure_time < now and not (is_owner or is_booked):
-            return Response({"status":"fail","message":"Carpool not available"}, status=status.HTTP_404_NOT_FOUND)
+        currunt_time = timezone.now()
 
-        serializer = CreateCarpoolSerializer(carpool, context={"request": request})
-        return Response({"status":"success","message":"Carpool detail fetched","Carpool": serializer.data}, status=status.HTTP_200_OK)
-    
-    except CreateCarpool.DoesNotExist:
-        return Response({"status":"fail","message":"Carpool not found"}, status=status.HTTP_404_NOT_FOUND)
+        queryset = CreateCarpool.objects.all()
+
+        public_carpools = queryset.filter(departure_time__gte=currunt_time)
+        
+        serializer = CreateCarpoolSerializer(public_carpools, many=True, context={"request": request})
+        return Response({ "status": "success", "message": "carpool details fetched", "Carpools details": serializer.data}, status=status.HTTP_200_OK)
 
     except Exception as e:
-        return Response({"status":"error","message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-    
+        return Response({"status": "error", "message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 # Search carpools (public) - show only upcoming rides with seats more than 0 , expired time ride hidden
 @api_view(['POST'])
+@permission_classes([AllowAny])
 def search_carpools(request):
-    now = timezone.now()
+    currunt_time = timezone.now()
     start = request.data.get("start_location", "").strip()
     end = request.data.get("end_location", "").strip()
     date = request.data.get("date")
 
     try:
-        qs = CreateCarpool.objects.filter(departure_time__gte=now, available_seats__gt=0)
+        qs = CreateCarpool.objects.filter(departure_time__gte=currunt_time, available_seats__gt=0)
         if start:
             qs = qs.filter(start_location__icontains=start)
         if end:
@@ -281,7 +272,7 @@ def sort_carpools_by(request):
         if available_seats:
             try:
                 seats = int(available_seats)
-                queryset = queryset.filter(available_seats__gte=seats)
+                queryset = queryset.filter(available_seats__gte=seats) # equal or greter then entered seats
 
             except:
                 return Response({"status": "fail", "message": "available_seats must be an integer"}, status=status.HTTP_400_BAD_REQUEST)

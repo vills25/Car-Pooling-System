@@ -25,5 +25,10 @@ urlpatterns = [
     path("sort_carpools_by/",sort_carpools_by),
 
     #-------- FIND & BOOK CARPOOL --------#
+    path("book_carpool/",book_carpool),
+    path("my_bookings_info/",my_bookings_info),
+    path('update_my_booking/', update_my_booking),
+    path('cancel_booking/',cancel_booking),
+    path('filter_bookings/', filter_bookings),
 
 ]+ static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

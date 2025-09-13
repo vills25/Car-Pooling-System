@@ -8,9 +8,7 @@ from rest_framework import status
 from django.db import transaction
 from django.utils import timezone
 from datetime import timedelta
-from django.contrib.auth import authenticate
 from django.core.mail import send_mail
-from carpooling_app.custom_jwt_auth import IsAuthenticatedCustom
 from .models import *
 from .serializers import *
 from django.db import transaction
@@ -124,18 +122,17 @@ def login_user(request):
         return Response({"status":"error", "message": str(e)}, status= status.HTTP_400_BAD_REQUEST)
 
 ## VIEW User profile data
-@api_view(['POST'])
+@api_view(['GET'])
 @permission_classes([IsAuthenticatedCustom])
 def view_profile(request):
 
-    user = request.data.get("user_id")
+    user = request.user
 
-    user = User.objects.filter(user_id=user).first()
     try:
         if not user:
             return Response({"status":"fail", "message":"user not found/exist"}, status= status.HTTP_404_NOT_FOUND)
         
-        serializer_data = UserSerializer(user)
+        serializer_data = UserSerializer(user, context={'request': request})
 
         return Response({
             "status":"success", 
