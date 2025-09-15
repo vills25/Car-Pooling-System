@@ -42,25 +42,27 @@ def send_otp_email(email, otp):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def register_user(request):
-    data = request.data
 
-    enter_username = data.get('username')
-    enter_first_name = data.get('first_name')
-    enter_last_name = data.get('last_name')
-    enter_email = data.get('email')
-    enter_password = make_password(data["password"])
-    enter_phone_number = data.get('phone_number')
-    enter_role = data.get('role','Passenger')
-    enter_address = data.get('address')
+    enter_username = request.data.get('username')
+    enter_first_name = request.data.get('first_name')
+    enter_last_name = request.data.get('last_name')
+    enter_email = request.data.get('email')
+    enter_password = make_password(request.data["password"])
+    enter_phone_number = request.data.get('phone_number')
+    enter_role = request.data.get('role','Passenger')
+    enter_address = request.data.get('address')
 
-    if not data.get("username") or not data.get("email") or not data.get("password"):
+    if not request.data.get("username") or not request.data.get("email") or not request.data.get("password"):
         return Response({"status":"fail","message":"username, email, password required"}, status=status.HTTP_400_BAD_REQUEST)
 
-    if User.objects.filter(username=data["username"]).exists():
+    if User.objects.filter(username=request.data["username"]).exists():
         return Response({"status":"fail","message":"Username already exist, try some diffrent username."}, status=status.HTTP_400_BAD_REQUEST)
     
-    if User.objects.filter(email=data["email"]).exists():
-        return Response({"status":"fail","message":"Email already registered"}, status=status.HTTP_400_BAD_REQUEST)
+    if User.objects.filter(email=request.data["email"]).exists():
+        return Response({"status":"fail","message":f"Email  with Email ID: {enter_email} already registered"}, status=status.HTTP_400_BAD_REQUEST)
+    
+    if User.objects.filter(phone_number = request.data["phone_number"]).exists():
+        return Response({"status":"fail", "message":f"user with phone number: {enter_phone_number} already registered"}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
         with transaction.atomic():
@@ -243,7 +245,8 @@ def forgot_password(request):
         request.session["reset_otp"] = otp
         request.session["reset_time"] = str(timezone.now())
         send_otp_email(email, otp)
-        return Response({"status":"success","message":"OTP sent to email"}, status=status.HTTP_200_OK)
+        return Response({"status":"success","message":f"OTP sent to email id: {email}"}, status=status.HTTP_200_OK)
+    
     except User.DoesNotExist:
         return Response({"status":"fail","message":"User not found"}, status=status.HTTP_404_NOT_FOUND)
 
@@ -266,5 +269,6 @@ def reset_password(request):
         user.password = make_password(new_password)
         user.save()
         return Response({"status":"success","message":"Password reset successfully"}, status=status.HTTP_200_OK)
+    
     except User.DoesNotExist:
         return Response({"status":"fail","message":"User not found"}, status=status.HTTP_404_NOT_FOUND)

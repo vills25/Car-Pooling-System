@@ -62,6 +62,8 @@ class CustomJWTAuthentication(JWTAuthentication):
         try:
             validated_token = self.get_validated_token(raw_token)
             user = self.get_user(validated_token)
+            if not user:
+                raise exceptions.AuthenticationFailed('Access Token is expired.')
             return (user, validated_token)
         except Exception as e:
             raise exceptions.AuthenticationFailed(str(e))

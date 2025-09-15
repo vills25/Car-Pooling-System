@@ -14,20 +14,14 @@ class CreateCarpoolAdmin(admin.ModelAdmin):
     search_fields = ['carpool_creator_driver','createcarpool_id']
 
 class BookingAdmin(admin.ModelAdmin):
-    list_display = ('fkCreateCarpool','passenger_name','booking_status')
-    search_fields = ['fkCreateCarpool','passenger_name']
+    list_display = ('carpool_driver_name','booking_id','passenger_name','booking_status')
+    search_fields = ['carpool_driver_name','passenger_name']
 
 class ActivityAdmin(admin.ModelAdmin):
     list_display = ('date_time','user','details')
     search_fields= ['user']
 
-class TransactionAdmin(admin.ModelAdmin):
-    list_display = ('booking','created_by','amount','payment_status')
-    search_fields = ['booking']
-
 admin.site.register(User, UserAdmin)
 admin.site.register(CreateCarpool,CreateCarpoolAdmin)
 admin.site.register(Booking,BookingAdmin)
 admin.site.register(Activity,ActivityAdmin)
-admin.site.register(Transaction,TransactionAdmin)
-

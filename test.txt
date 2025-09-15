@@ -1,0 +1,999 @@
+{
+    "detail": "{'detail': ErrorDetail(string='Given token not valid for any token type', code='token_not_valid'), 'code': ErrorDetail(string='token_not_valid', code='token_not_valid'), 'messages': [{'token_class': ErrorDetail(string='AccessToken', code='token_not_valid'), 'token_type': ErrorDetail(string='access', code='token_not_valid'), 'message': ErrorDetail(string='Token is expired', code='token_not_valid')}]}"
+}
+
+fkCreateCarpool
+
+from loguru import logger 
+
+models.py file 
+from django.db import models
+
+## Model for User Detail(Driver/Passanger)
+class User(models.Model):
+    user_id = models.AutoField(primary_key=True)
+    username = models.CharField(max_length=15, unique=True)
+    first_name = models.CharField(max_length=15)
+    last_name = models.CharField(max_length=15, null=True, blank=True)
+    email = models.EmailField(max_length=50,unique=True)
+    password = models.CharField(max_length=128)
+    phone_number = models.CharField(max_length=12, unique=True)
+    profile_pic = models.ImageField(upload_to="profiles/", null=True, blank=True )
+    role = models.CharField(max_length=20, choices=[("admin", "Admin"), ("driver", "Driver"), ("passenger", "Passenger")], default="passenger")
+    is_active = models.BooleanField(default=False)
+    address = models.TextField(null=True, blank=True)
+    
+    def __str__(self):
+        return f"{self.user_id} ({self.username})"
+
+# Model for Create Carpool
+class CreateCarpool(models.Model):
+    createcarpool_id = models.AutoField(primary_key=True)
+    carpool_creator_driver = models.ForeignKey(User, on_delete=models.CASCADE, related_name="journeys")
+    start_location = models.CharField(max_length=255)
+    end_location = models.CharField(max_length=255)
+    departure_time = models.DateTimeField()
+    arrival_time = models.DateTimeField(null=True, blank=True)
+    available_seats = models.IntegerField()
+    contribution_per_passenger = models.DecimalField(max_digits=10, decimal_places=2)
+    add_note = models.TextField(blank=True, null=True)
+    total_passenger_allowed = models.PositiveIntegerField()
+    contact_info = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
+    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name="updated_carpool")
+
+    def __str__(self):
+        return self.carpool_creator_driver.username
+
+# Booking (Passenger joins Journey)
+class Booking(models.Model):
+    booking_id = models.AutoField(primary_key=True)
+    carpool_driver_name = models.ForeignKey(CreateCarpool, on_delete=models.CASCADE, related_name="bookings")
+    passenger_name = models.ForeignKey(User, on_delete=models.CASCADE, related_name="passenger_bookings")
+    seat_book = models.PositiveIntegerField(default=1)
+    contribution_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    booking_status = models.CharField(max_length=20, choices=[("pending", "Pending"), ("confirmed", "Confirmed"), ("cancelled", "Cancelled")], default="pending")
+    ride_status = models.CharField(max_length=20, choices=[("upcomming","Upcomming"), ("active", "Active"), ("completed", "Completed"),("cancelled","Cancelled")], default="upcomming")
+    booked_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    booked_at = models.DateTimeField(auto_now_add=True)
+    pickup_location = models.CharField(max_length=255, null=True, blank=True)
+    drop_location = models.CharField(max_length=255, null=True, blank=True)
+    contact_info = models.TextField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
+    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name="updated_booking")
+
+    def __str__(self):
+        return self.passenger_name.username
+    
+## Model for activity log (Foreignkey used -->> User)
+class Activity(models.Model):
+    date_time = models.DateTimeField(auto_now_add=True)
+    user = models.ForeignKey(User, on_delete=models.SET_NULL,null=True, blank=True)
+    details = models.CharField(max_length=255)
+
+    def __str__(self):
+        return f'{self.user}----{self.date_time}----{self.details}'
+
+serializers.py file...
+from .models import *
+from rest_framework import serializers
+
+## User serializer
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['user_id', 'username', 'first_name', 'last_name', 'email', 
+                  'phone_number', 'profile_pic', 'role', 'is_active', 'address']
+
+class UserDetailSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['user_id', 'first_name']
+
+## Carpool Serializer
+class CreateCarpoolSerializer(serializers.ModelSerializer):
+    driver = serializers.CharField(source="carpool_creator_driver.first_name", read_only=True)
+    class Meta:
+        model = CreateCarpool
+        fields = ['createcarpool_id','driver','start_location','end_location','departure_time','arrival_time','available_seats','contribution_per_passenger','add_note','created_at','total_passenger_allowed','contact_info','updated_at','updated_by']
+
+class CarpoolDetailSerializer(serializers.ModelSerializer):
+    # driver = UserDetailSerializer(source="carpool_creator_driver", read_only=True)
+    carpool_driver_name = serializers.SerializerMethodField()
+    class Meta:
+        model = CreateCarpool
+        fields = ['createcarpool_id','carpool_driver_name','start_location','end_location','departure_time','arrival_time','available_seats','contribution_per_passenger','add_note','contact_info']
+
+    def get_carpool_driver_name(self, obj):
+        return obj.carpool_creator_driver.first_name if obj.carpool_creator_driver else None
+
+## Book carpool serializer
+class BookingSerializer(serializers.ModelSerializer):
+    passenger = UserSerializer(source="passenger_name", read_only=True)
+    carpool = CreateCarpoolSerializer(source="carpool_driver_name", read_only=True)
+    class Meta:
+        model = Booking
+        fields = ['booking_id','carpool','passenger','seat_book','contribution_amount','booking_status','ride_status','booked_by','booked_at','pickup_location','drop_location','contact_info','updated_at','updated_by']
+
+class BookingDetailSerializer(serializers.ModelSerializer):
+    # passenger = UserDetailSerializer(source="passenger_name", read_only=True)
+    passenger_name = serializers.SerializerMethodField()
+    carpool_detail = CarpoolDetailSerializer(source="carpool_driver_name", read_only=True)
+    class Meta:
+        model = Booking
+        fields = ['booking_id','passenger_name','seat_book','contribution_amount','booking_status','ride_status','booked_by','booked_at','pickup_location','drop_location','contact_info','carpool_detail']
+
+    def get_passenger_name(self, obj):
+        return obj.passenger_name.first_name if obj.passenger_name else None
+
+## Activity Serializer
+class ActivitySerializer(serializers.ModelSerializer):
+    user = UserSerializer(read_only=True)
+    class Meta:
+        model = Activity
+        fields = ['date_time','user','details']
+
+user_authentication.py file...
+import random
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
+from rest_framework_simplejwt.tokens import RefreshToken
+from django.contrib.auth.hashers import make_password, check_password
+from rest_framework.response import Response
+from rest_framework import status
+from django.db import transaction
+from django.utils import timezone
+from datetime import timedelta
+from django.core.mail import send_mail
+from .models import *
+from .serializers import *
+from django.db import transaction
+from django.contrib.auth.hashers import make_password
+from .custom_jwt_auth import IsAuthenticatedCustom
+
+## Save activity log
+def activity(user, details):
+    try:
+        Activity.objects.create(user=user, details=details)
+    except Exception as e:
+        print("Activity log failed:", str(e))
+
+## Generate random OTP (6 digit)
+def generate_otp():
+    return str(random.randint(100000, 999999))
+
+## Send OTP email
+def send_otp_email(email, otp):
+    subject = "Your OTP Code"
+    message = f"Your OTP for password reset is: {otp}. It will expire in 10 minutes."
+    from_email = "vishalsohaliya25@gmail.com"
+    try:
+        send_mail(subject, message, from_email, [email])
+        return True
+    except Exception as e:
+        print("Email send failed:", str(e))
+        return False
+
+## Register User (Sign-Up)
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def register_user(request):
+
+    enter_username = request.data.get('username')
+    enter_first_name = request.data.get('first_name')
+    enter_last_name = request.data.get('last_name')
+    enter_email = request.data.get('email')
+    enter_password = make_password(request.data["password"])
+    enter_phone_number = request.data.get('phone_number')
+    enter_role = request.data.get('role','Passenger')
+    enter_address = request.data.get('address')
+
+    if not request.data.get("username") or not request.data.get("email") or not request.data.get("password"):
+        return Response({"status":"fail","message":"username, email, password required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    if User.objects.filter(username=request.data["username"]).exists():
+        return Response({"status":"fail","message":"Username already exist, try some diffrent username."}, status=status.HTTP_400_BAD_REQUEST)
+    
+    if User.objects.filter(email=request.data["email"]).exists():
+        return Response({"status":"fail","message":f"Email  with Email ID: {enter_email} already registered"}, status=status.HTTP_400_BAD_REQUEST)
+    
+    if User.objects.filter(phone_number = request.data["phone_number"]).exists():
+        return Response({"status":"fail", "message":f"user with phone number: {enter_phone_number} already registered"}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        with transaction.atomic():
+            user = User.objects.create(
+                username = enter_username,
+                first_name = enter_first_name,
+                last_name = enter_last_name,
+                email = enter_email,
+                password = enter_password,
+                phone_number = enter_phone_number,
+                role = enter_role,
+                address = enter_address,
+                is_active = True
+            )
+            activity(user, f"User registered with username {user.username}")
+            serializer = UserSerializer(user)
+            return Response({"status":"success","message":"User registered successfully","User":serializer.data}, status=status.HTTP_201_CREATED)
+        
+    except Exception as e:
+        return Response({"status":"error","message":str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+## Login User (Sign-In)
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def login_user(request):
+    username = request.data.get("username")
+    password = request.data.get("password")
+
+    try:
+        user = User.objects.get(username=username)
+
+        if not check_password(password, user.password):
+            return Response({"status":"fail","message":"Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
+        
+        user_data = {"user_id": user.user_id, "username": user.username, "first_name": user.first_name,}
+
+        if user:
+
+            refresh = RefreshToken()
+            refresh['user_id'] = user.user_id
+            refresh['username'] = user.username
+
+            activity(user, f"{user.username} logged in")
+
+        return Response({
+            "status": "success",
+            "message": "Login successful",
+            "data":{
+                "User": user_data,
+                "access_token": str(refresh.access_token),
+                "refresh_token": str(refresh),
+            }
+        }, status=status.HTTP_200_OK)
+
+    except User.DoesNotExist:
+        return Response({"status":"fail","message":"User not found"}, status=status.HTTP_404_NOT_FOUND)
+    
+    except Exception as e:
+        return Response({"status":"error", "message": str(e)}, status= status.HTTP_400_BAD_REQUEST)
+
+## VIEW User profile data
+@api_view(['GET'])
+@permission_classes([IsAuthenticatedCustom])
+def view_profile(request):
+
+    user = request.user
+
+    try:
+        if not user:
+            return Response({"status":"fail", "message":"user not found/exist"}, status= status.HTTP_404_NOT_FOUND)
+        
+        serializer_data = UserSerializer(user, context={'request': request})
+
+        return Response({
+            "status":"success", 
+            "message":"user profile data fetched",
+                "data":{
+                    "User": serializer_data.data
+                    }
+            }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({"status":"error", "message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+## UPDATE User profile view
+@api_view(['PUT'])
+@permission_classes([IsAuthenticatedCustom])
+def update_profile(request):
+    try:
+        user = request.user
+        
+        # Extract all input fields
+        get_username = request.data.get('username')
+        get_email = request.data.get('email')
+        get_password = request.data.get('password')
+        get_first_name = request.data.get('first_name')
+        get_last_name = request.data.get('last_name')
+        get_phone_number = request.data.get('phone_number')
+        get_address = request.data.get('address')
+        get_role = request.data.get('role')
+        get_profile_pic = request.FILES.get('profile_pic')
+
+        with transaction.atomic():
+            if get_username is not None:
+                if User.objects.filter(username=get_username).exclude(user_id=user.user_id).exists():
+                    return Response({"status":"fail", "message": "Username already taken"}, status=status.HTTP_400_BAD_REQUEST)
+                user.username = get_username
+
+            if get_email is not None:
+                if User.objects.filter(email=get_email).exclude(user_id=user.user_id).exists():
+                    return Response({"status":"fail", "message": "Email already registered"}, status=status.HTTP_400_BAD_REQUEST)
+                user.email = get_email
+
+            if get_password is not None:
+                user.password = make_password(get_password)
+
+            if get_first_name is not None:
+                user.first_name = get_first_name
+
+            if get_last_name is not None:
+                user.last_name = get_last_name
+
+            if get_phone_number is not None:
+                user.phone_number = get_phone_number
+
+            if get_address is not None:
+                user.address = get_address
+
+            if get_role is not None:
+                user.role = get_role
+
+            if get_profile_pic is not None:
+                user.profile_pic = get_profile_pic
+
+            user.save()
+
+            activity(user, f"{user.username} updated his profile")
+            serializer = UserSerializer(user, context={'request': request})
+            return Response({"status":"success", "message":"Profile updated", "Updated User Data": serializer.data}, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        return Response({"status":"error", "message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+## DELETE User profile view    
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticatedCustom])
+def delete_profile(request):
+
+    user_id = request.data.get('user_id')
+
+    if not user_id:
+        return Response({"status":"fail", "message": "enter user_id please"}, status=status.HTTP_400_BAD_REQUEST)
+    
+    if not request.user.is_superuser and request.user.user_id != user_id:
+        return Response({"status":"fail", "message": "you can not delete others profile"}, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        user = User.objects.get(user_id = user_id)
+        user.delete()
+
+        activity(request.user, f"{request.user.username} deleted his profile: {user.username}")
+        return Response({"status":"success", "message": "User deleted"}, status=status.HTTP_200_OK)
+    
+    except User.DoesNotExist:
+        return Response({"status":"fail", "message": "User not found"}, status= status.HTTP_404_NOT_FOUND)
+
+## FORGOT User password view
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def forgot_password(request):
+    
+    email = request.data.get("email")
+
+    if not email:
+        return Response({"status":"fail","message":"email required"}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        user = User.objects.get(email=email)
+        otp = generate_otp()
+        request.session["reset_email"] = email
+        request.session["reset_otp"] = otp
+        request.session["reset_time"] = str(timezone.now())
+        send_otp_email(email, otp)
+        return Response({"status":"success","message":f"OTP sent to email id: {email}"}, status=status.HTTP_200_OK)
+    
+    except User.DoesNotExist:
+        return Response({"status":"fail","message":"User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+## RESET User password
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def reset_password(request):
+    email = request.data.get("email")
+    otp = request.data.get("otp")
+    new_password = request.data.get("new_password")
+
+    if not email or not otp or not new_password:
+        return Response({"status":"fail","message":"email, otp, new_password required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        if request.session.get("reset_email") != email or request.session.get("reset_otp") != otp:
+            return Response({"status":"fail","message":"Invalid OTP"}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = User.objects.get(email=email)
+        user.password = make_password(new_password)
+        user.save()
+        return Response({"status":"success","message":"Password reset successfully"}, status=status.HTTP_200_OK)
+    
+    except User.DoesNotExist:
+        return Response({"status":"fail","message":"User not found"}, status=status.HTTP_404_NOT_FOUND)
+ 
+booking_passanger.py file...
+from .custom_jwt_auth import IsDriverOrPassengerCustom
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.response import Response
+from rest_framework import status
+from django.db import transaction
+from django.utils import timezone
+from .models import CreateCarpool, Booking
+from .serializers import BookingDetailSerializer
+from .user_authentication import activity
+
+## Helper function for Ride status 
+def ride_status_function(request):
+    currunt_time = timezone.now()
+    bookings = Booking.objects.all()
+
+    for booking in bookings:
+        start = booking.carpool_driver_name.departure_time
+        end = booking.carpool_driver_name.arrival_time
+
+        if booking.booking_status == "cancelled":
+            booking.ride_status = "cancelled"
+
+        elif start > currunt_time:
+            booking.ride_status = "upcomming"
+
+        elif start <= currunt_time < end:
+            booking.ride_status = "active"
+
+        elif currunt_time >= end:
+            booking.ride_status = "completed"
+
+        booking.save()
+
+# Book a seat in carpool
+@api_view(['POST'])
+@permission_classes([IsDriverOrPassengerCustom])
+def book_carpool(request):
+    user = request.user
+
+    get_carpool_id = request.data.get("createcarpool_id")
+    seats = request.data.get("seat_book", 1)
+    get_contribution_amount = request.data.get("contribution_amount", 0)
+    get_pickup_location = request.data.get("pickup_location")
+    get_drop_location = request.data.get("drop_location")
+    get_contact_info = request.data.get("contact_info")
+
+    if not get_carpool_id:
+        return Response({"status":"fail","message":"createcarpool_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    seats = int(seats)
+    if seats <= 0 or not int:
+        return Response({"status":"fail","message":"seat_book must be positive or integer"}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        with transaction.atomic():
+            carpool = CreateCarpool.objects.get(pk=get_carpool_id)
+
+            # Past ride check
+            if carpool.departure_time < timezone.now():
+                return Response({"status":"fail", "message":"this ride has been expired"}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Seat availability check
+            if carpool.available_seats < seats:
+                return Response({"status":"fail", "message":"this ride is full"}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Prevent double booking
+            if Booking.objects.filter(carpool_driver_name=carpool, passenger_name=user, booking_status="confirmed").exists():
+                return Response({"status":"fail", "message":"you already booked this carpool"}, status=status.HTTP_400_BAD_REQUEST)
+
+            booking = Booking.objects.create(
+                carpool_driver_name = carpool,
+                passenger_name = user,
+                seat_book = seats,
+                contribution_amount = get_contribution_amount,
+                booked_by = user,
+                pickup_location = get_pickup_location,
+                drop_location = get_drop_location,
+                contact_info = get_contact_info,
+                booking_status = "confirmed"
+            )
+            
+            carpool.available_seats -= seats
+            carpool.save()
+            
+            user_role_change = user
+            if user_role_change.role != "passenger":
+                user_role_change.role = "passenger"
+                user_role_change.save()
+
+            activity(user, f"{user.username} booked {seats} seat(s) in carpool {carpool.createcarpool_id}")
+
+            serializer = BookingDetailSerializer(booking, context={'request': request})
+            return Response({"status":"success","message":"Ride Book successful","Booking Details":serializer.data}, status=status.HTTP_201_CREATED)
+
+    except CreateCarpool.DoesNotExist:
+        return Response({"status":"fail","message":"Carpool not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    except Exception as e:
+        return Response({"status":"error","message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+## get booking info
+@api_view(['GET'])
+@permission_classes([IsDriverOrPassengerCustom])
+def my_bookings_info(request):
+    user = request.user
+    try:
+        currunt_time = timezone.now()
+
+        ride_status_function(request) #calling helper function for ride status
+
+        upcoming_bookings = Booking.objects.filter(passenger_name=user, carpool_driver_name__departure_time__gte=currunt_time).order_by("carpool_driver_name__departure_time")
+        past_bookings = Booking.objects.filter(passenger_name=user, carpool_driver_name__departure_time__lt=currunt_time).order_by("-carpool_driver_name__departure_time")
+
+        data = {
+            "upcoming_bookings": BookingDetailSerializer(upcoming_bookings, many=True, context={"request": request}).data,
+            "past_bookings": BookingDetailSerializer(past_bookings, many=True, context={"request": request}).data
+        }
+        return Response({"status":"success","message":"Bookings fetched","Bookings":data}, status=status.HTTP_200_OK)
+    
+    except Exception as e:
+        return Response({"status":"error","message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+# Update booking (change seat count or pickup/drop)
+@api_view(['PUT'])
+@permission_classes([IsDriverOrPassengerCustom])
+def update_my_booking(request):
+    user = request.user
+    data = request.data
+    booking_id = data.get("booking_id")
+    if not booking_id:
+        return Response({"status":"fail","message":"booking_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        with transaction.atomic():
+            booking = Booking.objects.get(pk=booking_id, passenger_name=user)
+
+            # if booking.booking_status != "confirmed":
+            #     return Response({"status":"fail","message":"only confirmed bookings can be updated"}, status=status.HTTP_400_BAD_REQUEST)
+
+            carpool = booking.carpool_driver_name
+            if carpool.departure_time < timezone.now():
+                return Response({"status":"fail","message":"Cannot update booking of past ride"}, status=status.HTTP_400_BAD_REQUEST)
+
+            # If seat_book updated
+            if data.get("seat_book"):
+                try:
+                    new_seats = int(data["seat_book"])
+                except ValueError:
+                    return Response({"status":"fail","message":"seat_book must be integer"}, status=status.HTTP_400_BAD_REQUEST)
+
+                seat_diff = new_seats - booking.seat_book
+                if seat_diff > 0 and carpool.available_seats < seat_diff:
+                    return Response({"status":"fail","message":"Not enough seats available to increase booking"}, status=status.HTTP_400_BAD_REQUEST)
+
+                booking.seat_book = new_seats
+                carpool.available_seats -= seat_diff
+                carpool.save()
+
+            # Other fields
+            booking.pickup_location = data.get("pickup_location", booking.pickup_location)
+            booking.drop_location = data.get("drop_location", booking.drop_location)
+            booking.contribution_amount = data.get("contribution_amount", booking.contribution_amount)
+
+            booking.save()
+            activity(user, f"{user.username} updated booking {booking_id}")
+            serializer = BookingDetailSerializer(booking, context={"request": request})
+            return Response({"status":"success","message":"Booking updated","Booking":serializer.data}, status=status.HTTP_200_OK)
+        
+    except Booking.DoesNotExist:
+        return Response({"status":"fail","message":"Booking not found"}, status=status.HTTP_404_NOT_FOUND)
+    
+    except Exception as e:
+        return Response({"status":"error","message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+## cancel my bokked ride
+@api_view(['DELETE'])
+@permission_classes([IsDriverOrPassengerCustom])
+def cancel_booking(request):
+    user = request.user
+    get_booking_id = request.data.get('booking_id')
+    if not request.user.is_superuser and request.user:
+        return Response({"status":"fail", "message": "you can not delete others bookings"}, status=status.HTTP_403_FORBIDDEN)
+
+    if not get_booking_id:
+        return Response({"status":"fail", "message":"booking_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+       with transaction.atomic():
+            booking = Booking.objects.get(pk=get_booking_id, passenger_name=user)
+            if booking.booking_status == "cancelled":
+                return Response({"status":"fail","message":"Booking already cancelled"}, status=status.HTTP_400_BAD_REQUEST)
+
+            carpool = booking.carpool_driver_name
+            if carpool.departure_time < timezone.now():
+                return Response({"status":"fail","message":"ride has been already expired"}, status=status.HTTP_400_BAD_REQUEST)
+
+            booking.booking_status = "cancelled"
+            booking.save()
+            carpool.available_seats += booking.seat_book
+            carpool.save()
+
+            activity(user, f"{user.username} cancelled booking {get_booking_id}")
+            return Response({"status":"success", "message":"Booking cancelled"}, status=status.HTTP_200_OK)
+       
+    except Booking.DoesNotExist:
+        return Response({"status":"fail","message":"Booking not found"}, status=status.HTTP_404_NOT_FOUND)
+    
+    except Exception as e:
+        return Response({"status":"error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+## sort/filter for user of his booking , like sort according to time, date, etc...
+@api_view(['POST'])
+@permission_classes([IsDriverOrPassengerCustom])
+def filter_bookings(request):
+    user = request.user
+    filter_by = request.data.get("filter_by")
+    sort_by = request.data.get("sort_by")
+
+    bookings = Booking.objects.filter(passenger_name=user)
+
+    if filter_by == "upcoming":
+        bookings = bookings.filter(carpool_driver_name__departure_time__gte=timezone.now())
+    elif filter_by == "past":
+        bookings = bookings.filter(carpool_driver_name__departure_time__lt=timezone.now())
+
+    if sort_by == "latest_ride_date":
+        bookings = bookings.order_by("carpool_driver_name__departure_time")
+    elif sort_by == "earliest_ride_date":
+        bookings = bookings.order_by("-carpool_driver_name__departure_time")
+
+    serializer = BookingDetailSerializer(bookings, many=True, context={"request": request})
+    return Response({"status":"success","message":"Filtered and sorted bookings fetched","Bookings":serializer.data}, status=status.HTTP_200_OK) 
+
+carpool_manage.py file... 
+from .user_authentication import activity
+from .custom_jwt_auth import IsDriverCustom, IsAuthenticatedCustom
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.response import Response
+from rest_framework import status
+from django.db import transaction
+from django.utils import timezone
+from .models import CreateCarpool
+from .serializers import CreateCarpoolSerializer, BookingDetailSerializer
+from django.db.models import Sum
+from rest_framework.permissions import AllowAny
+
+## Create Carpool (driver only)
+@api_view(['POST'])
+@permission_classes([IsAuthenticatedCustom])
+def create_carpool(request):
+    # get user
+    user = request.user
+
+    # input fields
+    start_location = request.data.get('start_location')
+    end_location = request.data.get('end_location')
+    departure_time = request.data.get('departure_time')
+    available_seats = request.data.get('available_seats')
+    total_passenger_allowed = request.data.get('total_passenger_allowed')
+    contribution_per_passenger = request.data.get('contribution_per_passenger', 0)
+    add_note = request.data.get('add_note', '')
+    arrival_time = request.data.get('arrival_time')
+    contact_info = request.data.get('contact_info', '')
+
+    # required fields
+    required = ["start_location", "end_location", "departure_time", "available_seats", "total_passenger_allowed"]
+    for fields in required:
+        if not request.data.get(fields):
+            return Response({"status":"fail","message": f"{fields} is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    # check seats & pasanger 
+    try:
+        available_seats = int(available_seats)
+        total_allowed = int(total_passenger_allowed)
+        
+        if available_seats < 0 or total_allowed <= 0:
+            return Response({"status":"fail", "message":"available_seats must be >=0 and total_passenger_allowed must be >0"}, 
+                            status=status.HTTP_400_BAD_REQUEST)
+        
+        if available_seats > total_allowed:
+            return Response({"status":"fail", "message":"available_seats cannot be greater than total_passenger_allowed"}, 
+                              status=status.HTTP_400_BAD_REQUEST)
+    except ValueError:
+        return Response({"status":"fail", "message":"available_seats and total_passenger_allowed must be integers"}, 
+                          status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        with transaction.atomic():
+            carpool = CreateCarpool.objects.create(
+                carpool_creator_driver = user,
+                start_location = start_location,
+                end_location = end_location,
+                departure_time = departure_time,
+                available_seats = available_seats,
+                contribution_per_passenger = contribution_per_passenger,
+                add_note = add_note,
+                arrival_time = arrival_time,
+                total_passenger_allowed = total_allowed,
+                contact_info = contact_info
+            )
+            user_role_change = user
+            if user_role_change.role != "driver":
+                user_role_change.role = "driver"
+                user_role_change.save()
+
+            serializer = CreateCarpoolSerializer(carpool)
+            return Response({"status":"success", "message":"Carpool added", "Carpool data": serializer.data}, status=status.HTTP_201_CREATED)
+        
+    except Exception as e:
+        return Response({"status":"error","message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+## Edit Carpool details
+@api_view(['PUT'])
+@permission_classes([IsDriverCustom])
+def update_carpool(request):
+    user = request.user
+    
+    # Extract all input fields
+    get_carpool_id = request.data.get("createcarpool_id")
+    get_available_seats = request.data.get("available_seats")
+    get_start_location = request.data.get("start_location")
+    get_end_location = request.data.get("end_location")
+    get_departure_time = request.data.get("departure_time")
+    get_contribution = request.data.get("contribution_per_passenger")
+    get_note = request.data.get("add_note")
+    get_arrival_time = request.data.get("arrival_time")
+    get_total_passengers = request.data.get("total_passenger_allowed")
+    get_contact = request.data.get("contact_info")
+
+    # Validate required field
+    if not get_carpool_id:
+        return Response({"status":"fail","message":"createcarpool_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        # Get the carpool to update
+        carpool = CreateCarpool.objects.get(createcarpool_id=get_carpool_id)
+        
+        # Check ownership
+        if carpool.carpool_creator_driver != user:
+            return Response({"status":"fail","message":"You cannot edit other carpool details"}, status=status.HTTP_403_FORBIDDEN)
+
+        # Handle available seats update with validation
+        if get_available_seats is not None:
+            try:
+                new_available = int(get_available_seats)
+                confirmed_count = carpool.bookings.filter(booking_status="confirmed").aggregate(total=Sum("seat_book"))["total"] or 0
+                
+                if new_available < confirmed_count:
+                    return Response({
+                        "status":"fail",
+                        "message":"Available seats cannot be less than already confirmed booked seats" }, status=status.HTTP_400_BAD_REQUEST)
+                
+                carpool.available_seats = new_available
+            except ValueError:
+                return Response({"status":"fail", "message":"available_seats must be integer"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Update other fields if provided
+        if get_start_location is not None:
+            carpool.start_location = get_start_location
+
+        if get_end_location is not None:
+            carpool.end_location = get_end_location
+
+        if get_departure_time is not None:
+            carpool.departure_time = get_departure_time
+
+        if get_contribution is not None:
+            carpool.contribution_per_passenger = get_contribution
+
+        if get_note is not None:
+            carpool.add_note = get_note
+
+        if get_arrival_time is not None:
+            carpool.arrival_time = get_arrival_time
+
+        if get_contact is not None:
+            carpool.contact_info = get_contact
+            
+        # Handle total passengers with validation
+        if get_total_passengers is not None:
+            try:
+                carpool.total_passenger_allowed = int(get_total_passengers)
+            except ValueError:
+                return Response({"status":"fail", "message":"total_passenger_allowed must be integer"}, status=status.HTTP_400_BAD_REQUEST)
+
+        carpool.save()
+        activity(user, f"{user.username} updated carpool {carpool.createcarpool_id}")
+        serializer = CreateCarpoolSerializer(carpool, context={"request": request})
+
+        return Response({"status":"success", "message":"Carpool updated", "data":{"carpool updated data": serializer.data} }, status=status.HTTP_200_OK)
+        
+    except CreateCarpool.DoesNotExist:
+        return Response({"status":"fail", "message":"Carpool not found"}, status=status.HTTP_404_NOT_FOUND)
+    
+    except Exception as e:
+        return Response({"status":"error", "message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    
+## Delete Carpool
+@api_view(['DELETE'])
+@permission_classes([IsDriverCustom])
+def delete_carpool(request):
+    user = request.user
+    get_carpool_id = request.data.get("carpool_id")
+    if not get_carpool_id:
+        return Response({"status":"fail", "message":"carpool_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        carpool = CreateCarpool.objects.get(createcarpool_id = get_carpool_id )
+        if user.role == 'admin' or carpool.carpool_creator_driver == user:
+            carpool.delete()
+            activity(user, f"{user.username} deleted his carpool: {get_carpool_id}")
+            return Response({"status":"success", "message":"Carpool deleted"}, status=status.HTTP_200_OK)
+        else:
+            return Response({"status":"fail", "message":"you can not delete other's carpool"}, status=status.HTTP_401_UNAUTHORIZED)
+
+    except CreateCarpool.DoesNotExist:
+        return Response({"status":"fail", "message":"entered carpool not found!!"}, status=status.HTTP_404_NOT_FOUND)
+
+    except Exception as e:
+        return Response({"status": "error", "message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    
+## Driver: view my carpools
+@api_view(['GET'])
+@permission_classes([IsDriverCustom])
+def view_my_carpools(request):
+    user = request.user
+    # if user.role != "driver":
+    #     return Response({"status":"fail","message":"only drivers can view their carpools"}, status=status.HTTP_403_FORBIDDEN)
+    try:
+        currunt_time = timezone.now()
+        upcoming_carpool = CreateCarpool.objects.filter(carpool_creator_driver=user, departure_time__gte=currunt_time).order_by("departure_time")
+        past_carpool = CreateCarpool.objects.filter(carpool_creator_driver=user, departure_time__lt=currunt_time).order_by("-departure_time")
+        both_data = {
+            "upcoming_carpool": CreateCarpoolSerializer(upcoming_carpool, many=True).data,
+            "past_carpool": CreateCarpoolSerializer(past_carpool, many=True).data
+        }
+        return Response({"status":"success","message":"Carpools data fetched", "Data":{"Carpools": both_data}}, status=status.HTTP_200_OK)
+    
+    except Exception as e:
+        return Response({"status":"error","message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+# Carpool list (public)
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def carpool_detail(request):
+    try:
+        currunt_time = timezone.now()
+
+        queryset = CreateCarpool.objects.all()
+
+        ## show only upcoming rides for all users
+        public_carpools = queryset.filter(departure_time__gte=currunt_time).order_by('-created_at')
+        
+        serializer = CreateCarpoolSerializer(public_carpools, many=True)
+        return Response({ "status": "success", "message": "carpool details fetched", "Carpools details": serializer.data}, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        return Response({"status": "error", "message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+# Search carpools (public) - show only upcoming rides with seats more than 0 , expired time ride hidden
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def search_carpools(request):
+    currunt_time = timezone.now()
+    start = request.data.get("start_location", "").strip()
+    end = request.data.get("end_location", "").strip()
+    date = request.data.get("date")
+
+    try:
+        qs = CreateCarpool.objects.filter(departure_time__gte=currunt_time, available_seats__gt=0)
+        if start:
+            qs = qs.filter(start_location__icontains=start)
+        if end:
+            qs = qs.filter(end_location__icontains=end)
+        if date:
+            qs = qs.filter(departure_time__icontains=date)
+
+        if not qs.exists():
+            return Response({"status":"fail","message":"No carpools found"}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = CreateCarpoolSerializer(qs, many=True)
+        return Response({"status":"success","message":"Carpools fetched","Carpools": serializer.data}, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({"status":"error","message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+## sort carpools by date, location, available seats, departure time, arrivval time, seats.
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def sort_carpools_by(request):
+    user = request.user
+    try:
+        queryset = CreateCarpool.objects.filter(available_seats__gt=0).order_by('-departure_time')
+        start_location = request.data.get('start_location')
+        end_location = request.data.get('end_location')
+        available_seats = request.data.get('available_seats')
+        date = request.data.get('date')
+
+        if start_location:
+            queryset = queryset.filter(start_location__icontains=start_location)
+
+        if end_location:
+            queryset = queryset.filter(end_location__icontains=end_location)
+
+        if date:
+            queryset = queryset.filter(departure_time__icontains=date)
+
+        if available_seats:
+            try:
+                seats = int(available_seats)
+                queryset = queryset.filter(available_seats__gte=seats) # equal or greter then entered seats
+
+            except:
+                return Response({"status": "fail", "message": "available_seats must be an integer"}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not queryset.exists():
+            return Response({"status": "fail", "message": "No matching Carpools found"}, status=status.HTTP_404_NOT_FOUND)
+
+        activity(user, f"{request.user.first_name} sorted Carpools")
+        serializer = CreateCarpoolSerializer(queryset, many=True)
+
+        return Response({"status": "success", "message": "Carpools fetched", "Carpools": serializer.data}, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        return Response({"status": "error", "message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    
+## view each confirmed booking passenger for each carpool
+@api_view(['GET'])
+@permission_classes([IsDriverCustom])
+def view_booked_passenger(request):
+    user = request.user
+    try:
+        carpools = CreateCarpool.objects.filter(carpool_creator_driver=user)
+        
+        if not carpools.exists():
+            return Response({"status":"fail","message":"You have no carpools"}, status=status.HTTP_404_NOT_FOUND)
+
+        all_confirmed_bookings = []
+        for carpool in carpools:
+            confirmed_bookings = carpool.bookings.filter(booking_status="confirmed").order_by("booked_at")
+
+            if confirmed_bookings.exists():
+                serializer = BookingDetailSerializer(confirmed_bookings, many=True)
+                all_confirmed_bookings.extend(serializer.data)
+
+        if not all_confirmed_bookings:
+            return Response({"status":"fail","message":"No confirmed bookings found for your carpools"}, status=status.HTTP_404_NOT_FOUND)
+
+        return Response({"status":"success", "message":"Confirmed bookings fetched", "Data":{"confirmed bookings": all_confirmed_bookings}}, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        return Response({"status":"error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR) 
+
+urls.py file ..
+from django.urls import path
+from .user_authentication import *
+from .carpool_manage_view import *
+from .booking_passanger_view import *
+from django.conf import settings
+from django.conf.urls.static import static
+
+urlpatterns = [
+    #-------- AUTHENTICATION & USER --------#
+    path('register/', register_user),
+    path('login/', login_user),
+    path('profile/my-profile/',view_profile),
+    path('profile/update-profile/', update_profile),
+    path('profile/delete-profile/', delete_profile),
+    path('profile/forgot-password/', forgot_password),
+    path('profile/reset-password/', reset_password),
+    #-------- PUBLIC --------#
+    path("carpool/detail/",carpool_detail), 
+    path("carpool/search-carpools/",search_carpools),
+    path("carpool/sort-carpools/",sort_carpools_by),
+    #-------- CREATE CARPOOL --------#
+    path('carpool/create/', create_carpool),
+    path('carpool/update/', update_carpool),
+    path('carpool/delete/', delete_carpool),
+    path('carpool/my-carpools/', view_my_carpools),
+    path('carpool/view-passengers/', view_booked_passenger),
+    #-------- BOOK CARPOOL --------#
+    path("booking/create/",book_carpool),
+    path("booking/my-bookings/",my_bookings_info),
+    path('booking/update/', update_my_booking),
+    path('booking/delete/',cancel_booking),
+    path('booking/filter/', filter_bookings),
+]+ static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+  

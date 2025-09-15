@@ -14,8 +14,8 @@ def ride_status_function(request):
     bookings = Booking.objects.all()
 
     for booking in bookings:
-        start = booking.fkCreateCarpool.departure_time
-        end = booking.fkCreateCarpool.arrival_time
+        start = booking.carpool_driver_name.departure_time
+        end = booking.carpool_driver_name.arrival_time
 
         if booking.booking_status == "cancelled":
             booking.ride_status = "cancelled"
@@ -64,11 +64,11 @@ def book_carpool(request):
                 return Response({"status":"fail", "message":"this ride is full"}, status=status.HTTP_400_BAD_REQUEST)
 
             # Prevent double booking
-            if Booking.objects.filter(fkCreateCarpool=carpool, passenger_name=user, booking_status="confirmed").exists():
+            if Booking.objects.filter(carpool_driver_name=carpool, passenger_name=user, booking_status="confirmed").exists():
                 return Response({"status":"fail", "message":"you already booked this carpool"}, status=status.HTTP_400_BAD_REQUEST)
 
             booking = Booking.objects.create(
-                fkCreateCarpool = carpool,
+                carpool_driver_name = carpool,
                 passenger_name = user,
                 seat_book = seats,
                 contribution_amount = get_contribution_amount,
@@ -81,6 +81,11 @@ def book_carpool(request):
             
             carpool.available_seats -= seats
             carpool.save()
+            
+            user_role_change = user
+            if user_role_change.role != "passenger":
+                user_role_change.role = "passenger"
+                user_role_change.save()
 
             activity(user, f"{user.username} booked {seats} seat(s) in carpool {carpool.createcarpool_id}")
 
@@ -103,8 +108,8 @@ def my_bookings_info(request):
 
         ride_status_function(request) #calling helper function for ride status
 
-        upcoming_bookings = Booking.objects.filter(passenger_name=user, fkCreateCarpool__departure_time__gte=currunt_time).order_by("fkCreateCarpool__departure_time")
-        past_bookings = Booking.objects.filter(passenger_name=user, fkCreateCarpool__departure_time__lt=currunt_time).order_by("-fkCreateCarpool__departure_time")
+        upcoming_bookings = Booking.objects.filter(passenger_name=user, carpool_driver_name__departure_time__gte=currunt_time).order_by("carpool_driver_name__departure_time")
+        past_bookings = Booking.objects.filter(passenger_name=user, carpool_driver_name__departure_time__lt=currunt_time).order_by("-carpool_driver_name__departure_time")
 
         data = {
             "upcoming_bookings": BookingDetailSerializer(upcoming_bookings, many=True, context={"request": request}).data,
@@ -132,7 +137,7 @@ def update_my_booking(request):
             # if booking.booking_status != "confirmed":
             #     return Response({"status":"fail","message":"only confirmed bookings can be updated"}, status=status.HTTP_400_BAD_REQUEST)
 
-            carpool = booking.fkCreateCarpool
+            carpool = booking.carpool_driver_name
             if carpool.departure_time < timezone.now():
                 return Response({"status":"fail","message":"Cannot update booking of past ride"}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -184,7 +189,7 @@ def cancel_booking(request):
             if booking.booking_status == "cancelled":
                 return Response({"status":"fail","message":"Booking already cancelled"}, status=status.HTTP_400_BAD_REQUEST)
 
-            carpool = booking.fkCreateCarpool
+            carpool = booking.carpool_driver_name
             if carpool.departure_time < timezone.now():
                 return Response({"status":"fail","message":"ride has been already expired"}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -213,14 +218,14 @@ def filter_bookings(request):
     bookings = Booking.objects.filter(passenger_name=user)
 
     if filter_by == "upcoming":
-        bookings = bookings.filter(fkCreateCarpool__departure_time__gte=timezone.now())
+        bookings = bookings.filter(carpool_driver_name__departure_time__gte=timezone.now())
     elif filter_by == "past":
-        bookings = bookings.filter(fkCreateCarpool__departure_time__lt=timezone.now())
+        bookings = bookings.filter(carpool_driver_name__departure_time__lt=timezone.now())
 
     if sort_by == "latest_ride_date":
-        bookings = bookings.order_by("fkCreateCarpool__departure_time")
+        bookings = bookings.order_by("carpool_driver_name__departure_time")
     elif sort_by == "earliest_ride_date":
-        bookings = bookings.order_by("-fkCreateCarpool__departure_time")
+        bookings = bookings.order_by("-carpool_driver_name__departure_time")
 
     serializer = BookingDetailSerializer(bookings, many=True, context={"request": request})
     return Response({"status":"success","message":"Filtered and sorted bookings fetched","Bookings":serializer.data}, status=status.HTTP_200_OK)

@@ -40,7 +40,7 @@ class CreateCarpool(models.Model):
 # Booking (Passenger joins Journey)
 class Booking(models.Model):
     booking_id = models.AutoField(primary_key=True)
-    fkCreateCarpool = models.ForeignKey(CreateCarpool, on_delete=models.CASCADE, related_name="bookings")
+    carpool_driver_name = models.ForeignKey(CreateCarpool, on_delete=models.CASCADE, related_name="bookings")
     passenger_name = models.ForeignKey(User, on_delete=models.CASCADE, related_name="passenger_bookings")
     seat_book = models.PositiveIntegerField(default=1)
     contribution_amount = models.DecimalField(max_digits=10, decimal_places=2)
@@ -65,15 +65,3 @@ class Activity(models.Model):
 
     def __str__(self):
         return f'{self.user}----{self.date_time}----{self.details}'
-
-## Model for keep records of transactions
-class Transaction(models.Model):
-    transaction_id = models.AutoField(primary_key=True)
-    booking = models.OneToOneField(Booking, on_delete=models.CASCADE, related_name="transaction")
-    amount = models.DecimalField(max_digits=10, decimal_places=2)
-    payment_status = models.CharField(max_length=20,choices=[("pending", "Pending"), ("paid", "Paid"), ("failed", "Failed")],default="pending")
-    created_at = models.DateTimeField(auto_now_add=True)
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE)
-
-    def __str__(self):
-        return f"Transaction {self.transaction_id} - {self.payment_status}"
