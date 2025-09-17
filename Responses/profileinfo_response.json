@@ -1,0 +1,19 @@
+{
+  "status": "success",
+  "message": "user profile data fetched",
+  "data": {
+    "User": {
+      "user_id": 1,
+      "username": "pratham@2",
+      "first_name": "Pratham",
+      "last_name": "Patel",
+      "email": "pratham@gmail.com",
+      "phone_number": "9856985698",
+      "profile_pic": "http://127.0.0.1:8000/media/profiles/20241206_xQbvUKB.jpg",
+      "role": "driver",
+      "is_active": true,
+      "address": "Surat",
+      "gender": "male"
+    }
+  }
+}

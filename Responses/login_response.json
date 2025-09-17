@@ -1,0 +1,13 @@
+{
+    "status": "success",
+    "message": "Login successful",
+    "data": {
+        "User": {
+            "user_id": 1,
+            "username": "pratham@2",
+            "first_name": "Pratham"
+        },
+        "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzU4MDk1ODkwLCJpYXQiOjE3NTgwMDk0OTAsImp0aSI6ImE5MDkwM2Y3Yjk1MjQ4NjJhOGZmNmUzYjU3OTZhNDkwIiwidXNlcl9pZCI6MSwidXNlcm5hbWUiOiJwcmF0aGFtQDIifQ.e8s46bfMxAUqD5dilBmsgPJM30775PS2r8MePaTXGjs",
+        "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc2MDYwMTQ5MCwiaWF0IjoxNzU4MDA5NDkwLCJqdGkiOiIzZDgzYmM5ZTdiNTI0MjViYTYxZGFlYzg5Y2JmNWJlMyIsInVzZXJfaWQiOjEsInVzZXJuYW1lIjoicHJhdGhhbUAyIn0.s0WXHTpWfPw8K4caDvMXPwntA97QAlodEtZcg4DWdlQ"
+    }
+}

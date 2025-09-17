@@ -1,7 +1,8 @@
 from django.urls import path
-from .user_authentication import *
-from .carpool_manage_view import *
-from .booking_passanger_view import *
+from .user_auth import *
+from .carpool_view import *
+from .booking_view import *
+from .admin_view import *
 from django.conf import settings
 from django.conf.urls.static import static
 
@@ -9,11 +10,19 @@ urlpatterns = [
     #-------- AUTHENTICATION & USER --------#
     path('register/', register_user),
     path('login/', login_user),
+    path('logout_user/', logout_user),
     path('profile/my-profile/',view_profile),
     path('profile/update-profile/', update_profile),
     path('profile/delete-profile/', delete_profile),
     path('profile/forgot-password/', forgot_password),
     path('profile/reset-password/', reset_password),
+
+    #-------- ADMIN --------#
+    path('admin/view-users/', admin_view_users),
+    path('admin/view-activities/', view_all_activities),
+    path('admin/user-status/', admin_active_deactive_user),
+    path('admin/carpools/', admin_view_carpools),
+    path('admin/carpool-bookings/', admin_view_bookings),
 
     #-------- PUBLIC --------#
     path("carpool/detail/",carpool_detail), 
@@ -33,5 +42,6 @@ urlpatterns = [
     path('booking/update/', update_my_booking),
     path('booking/delete/',cancel_booking),
     path('booking/filter/', filter_bookings),
-
+    path("driver/booking-requests/", driver_view_booking_requests),
+    path("driver/booking-action/", driver_approve_reject_booking),
 ]+ static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
