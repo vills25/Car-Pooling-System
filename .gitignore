@@ -28,6 +28,6 @@ db.sqlite3
 Thumbs.db
 
 # text files
-.txt
+test.txt
 *.log
 *.tmp
