@@ -1,4 +1,3 @@
-import random
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -7,36 +6,12 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.db import transaction
 from django.utils import timezone
-from datetime import timedelta
-from django.core.mail import send_mail
-from .models import *
-from .serializers import *
 from django.db import transaction
 from django.contrib.auth.hashers import make_password
+from .models import *
+from .serializers import *
 from .custom_jwt_auth import IsAuthenticatedCustom
-
-## Save activity log
-def activity(user, details):
-    try:
-        Activity.objects.create(user=user, details=details)
-    except Exception as e:
-        print("Activity log failed:", str(e))
-
-## Generate random OTP (6 digit)
-def generate_otp():
-    return str(random.randint(100000, 999999))
-
-## Send OTP email
-def send_otp_email(email, otp):
-    subject = "Your OTP Code"
-    message = f"Your OTP for password reset is: {otp}. It will expire in 10 minutes."
-    from_email = "vishalsohaliya25@gmail.com"
-    try:
-        send_mail(subject, message, from_email, [email])
-        return True
-    except Exception as e:
-        print("Email send failed:", str(e))
-        return False
+from .utils import activity, send_otp_email, generate_otp
 
 ## Register User (Sign-Up)
 @api_view(['POST'])

@@ -1,71 +1,15 @@
-from .custom_jwt_auth import IsDriverOrPassengerCustom, IsDriverCustom
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
 from django.db import transaction
 from django.utils import timezone
+from .custom_jwt_auth import IsDriverOrPassengerCustom, IsDriverCustom
 from .models import CreateCarpool, Booking
 from .serializers import BookingDetailSerializer
 from .user_auth import activity
-from django.core.mail import send_mail
-from django.conf import settings
+from .utils import ride_status_function, send_booking_email
 
-## send Email for booking confirmed / rejected / waitlisted / cancelled
-def send_booking_email(booking, status_type):
-    subject = ""
-    message = ""
-    passenger_email = booking.passenger_name.email
-    carpool = booking.carpool_driver_name
-
-    if status_type == "confirmed":
-        subject = "Carpool Booking Confirmed"
-        message = (
-            f"Hello {booking.passenger_name.first_name},\n\n"
-            f"Your Booking ID: {booking.booking_id} has been confirmed.\n\n"
-            f"Journey From: {carpool.start_location} To {carpool.end_location}\n"
-            f"Departure time: {carpool.departure_time}\nSeats booked: {booking.seat_book}\n"
-            f"Total fare price: {booking.contribution_amount} INR\n\n Happy Journey!\n\nCustomer Helpline: 1800-000-000 or +91 9856896548"
-        )
-    elif status_type == "rejected":
-        subject = "Carpool Booking Rejected"
-        message = f"Hello {booking.passenger_name.first_name},\n\nYour Booking ID: {booking.booking_id} was rejected by the driver."
-
-    elif status_type == "waitlisted":
-        subject = "Carpool Booking Waitlisted"
-        message = f"Hello {booking.passenger_name.first_name},\n\nYour Booking ID: {booking.booking_id} is waitlisted due to no available seats.\n We will get back to you shortly or you can cancle and find another available ride.\n\n Customer Helpline: 1800-000-000 or +91 9856896548"
-
-    elif status_type == "cancelled":
-        subject = "Carpool Booking Cancelled"
-        message = f"Hello {booking.passenger_name.first_name},\n\nYour Booking ID: {booking.booking_id} has been cancelled.\n Carpool Management System,\n Customer Helpline: 1800-000-000 or +91 9856896548"
-    try:
-        send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [passenger_email])
-    except Exception as e:
-        print("Email send failed:", e)
-
-## Helper function for Ride status 
-def ride_status_function(request):
-    currunt_time = timezone.now()
-    bookings = Booking.objects.all()
-
-    for booking in bookings:
-        start = booking.carpool_driver_name.departure_time
-        end = booking.carpool_driver_name.arrival_time
-
-        if booking.booking_status == "cancelled":
-            booking.ride_status = "cancelled"
-
-        elif start > currunt_time:
-            booking.ride_status = "upcomming"
-
-        elif start <= currunt_time < end:
-            booking.ride_status = "active"
-
-        elif currunt_time >= end:
-            booking.ride_status = "completed"
-
-        booking.save()
-
-# Book a seat in carpool
+# Book a seat in carpool (Only Logged-in(Registered) user can book only available upcomming carpools)
 @api_view(['POST'])
 @permission_classes([IsDriverOrPassengerCustom])
 def book_carpool(request):
@@ -158,12 +102,11 @@ def book_carpool(request):
 def my_bookings_info(request):
     user = request.user
     try:
-        currunt_time = timezone.now()
-
+        current_time = timezone.localtime(timezone.now())
+        print("####### CURRUNT TIME >>>>>>>>>>>>>>>>>>>", current_time)
         ride_status_function(request) #calling helper function for ride status
-
-        upcoming_bookings = Booking.objects.filter(passenger_name=user, carpool_driver_name__departure_time__gte=currunt_time).order_by("carpool_driver_name__departure_time")
-        past_bookings = Booking.objects.filter(passenger_name=user, carpool_driver_name__departure_time__lt=currunt_time).order_by("-carpool_driver_name__departure_time")
+        upcoming_bookings = Booking.objects.filter(passenger_name=user, carpool_driver_name__departure_time__gte=current_time).order_by("carpool_driver_name__departure_time")
+        past_bookings = Booking.objects.filter(passenger_name=user, carpool_driver_name__departure_time__lt=current_time).order_by("-carpool_driver_name__departure_time")
 
         data = {
             "upcoming_bookings": BookingDetailSerializer(upcoming_bookings, many=True, context={"request": request}).data,
@@ -299,6 +242,8 @@ def filter_bookings(request):
     serializer = BookingDetailSerializer(bookings, many=True, context={"request": request})
     return Response({"status":"success","message":"Filtered and sorted bookings fetched","Bookings":serializer.data}, status=status.HTTP_200_OK)
 
+#-------- DRIVER ONLY --------#
+
 ## booking request from passenger view for driver role.
 @api_view(['GET'])
 @permission_classes([IsDriverCustom])
@@ -366,6 +311,34 @@ def driver_approve_reject_booking(request):
 
     except Booking.DoesNotExist:
         return Response({"status": "fail", "message": "Booking not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    except Exception as e:
+        return Response({"status":"error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+## view each confirmed booking passenger for each carpool
+@api_view(['GET'])
+@permission_classes([IsDriverCustom])
+def view_booked_passenger(request):
+    user = request.user
+    
+    try:
+        carpools = CreateCarpool.objects.filter(carpool_creator_driver=user).order_by("-created_at")
+        
+        if not carpools.exists():
+            return Response({"status":"fail","message":"You have no carpools"}, status=status.HTTP_404_NOT_FOUND)
+
+        all_confirmed_bookings = []
+        for carpool in carpools:
+            confirmed_bookings = carpool.bookings.filter(booking_status="confirmed").order_by("booked_at")
+
+            if confirmed_bookings.exists():
+                serializer = BookingDetailSerializer(confirmed_bookings, many=True)
+                all_confirmed_bookings.extend(serializer.data)
+
+        if not all_confirmed_bookings:
+            return Response({"status":"fail","message":"No confirmed bookings found for your carpools"}, status=status.HTTP_404_NOT_FOUND)
+
+        return Response({"status":"success", "message":"Confirmed bookings fetched", "Data":{"confirmed bookings": all_confirmed_bookings}}, status=status.HTTP_200_OK)
 
     except Exception as e:
         return Response({"status":"error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

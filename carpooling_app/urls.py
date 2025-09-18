@@ -1,10 +1,10 @@
 from django.urls import path
+from django.conf import settings
+from django.conf.urls.static import static
 from .user_auth import *
 from .carpool_view import *
 from .booking_view import *
 from .admin_view import *
-from django.conf import settings
-from django.conf.urls.static import static
 
 urlpatterns = [
     #-------- AUTHENTICATION & USER --------#
@@ -20,7 +20,7 @@ urlpatterns = [
     #-------- ADMIN --------#
     path('admin/view-users/', admin_view_users),
     path('admin/view-activities/', view_all_activities),
-    path('admin/user-status/', admin_active_deactive_user),
+    path('admin/user-action/', admin_active_deactive_user),
     path('admin/carpools/', admin_view_carpools),
     path('admin/carpool-bookings/', admin_view_bookings),
 

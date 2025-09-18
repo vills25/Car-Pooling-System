@@ -1,17 +1,117 @@
-from operator import ge
 from .user_auth import activity
+from .utils import km_inr_format
+from .models import CreateCarpool
+from .serializers import CreateCarpoolSerializer, BookingDetailSerializer
 from .custom_jwt_auth import IsDriverCustom, IsAuthenticatedCustom
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
 from django.db import transaction
 from django.utils import timezone
-from .models import CreateCarpool
-from .serializers import CreateCarpoolSerializer, BookingDetailSerializer
 from django.db.models import Sum
 from rest_framework.permissions import AllowAny
 
-## Create Carpool (driver only)
+#-------- PUBLIC (Anyone can see this details) --------#
+
+# Carpool list (public)
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def carpool_detail(request):
+    try:
+        current_time = timezone.localtime(timezone.now())
+
+        ## show only upcoming rides for all users
+        public_carpools = CreateCarpool.objects.filter(departure_time__gte=current_time, available_seats__gt=0).order_by('-created_at')
+        
+        serializer = CreateCarpoolSerializer(public_carpools, many=True)
+        return Response({ "status": "success", "message": "carpool details fetched", "Carpools details": km_inr_format(serializer.data)}, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        return Response({"status": "error", "message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+# Search carpools (public) - show only upcoming rides with seats more than 0 , expired time ride hidden
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def search_carpools(request):
+
+    start = request.data.get("start_location")
+    end = request.data.get("end_location")
+    date = request.data.get("date")
+    try:
+        qs = CreateCarpool.objects.filter(available_seats__gt=0).order_by('-departure_time')
+        if start:
+            qs = qs.filter(start_location__icontains=start)
+
+        if end:
+            qs = qs.filter(end_location__icontains=end)
+
+        if date:
+            qs = qs.filter(departure_time__icontains=date)
+
+        if not qs.exists():
+            return Response({"status":"fail","message":"No carpools found"}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = CreateCarpoolSerializer(qs, many=True)
+        return Response({"status":"success","message":"Carpools fetched","Carpools": km_inr_format(serializer.data)}, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        return Response({"status":"error","message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+## sort carpools by date, location, available seats, departure time, arrivval time, seats.
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def sort_carpools_by(request):
+    user = request.user
+    try:
+
+        queryset = CreateCarpool.objects.filter(available_seats__gt=0).order_by('-departure_time')
+
+        start_location = request.data.get('start_location')
+        end_location = request.data.get('end_location')
+        date = request.data.get('date')
+        available_seats = request.data.get('available_seats')
+        gender_preference = request.data.get('gender_preference')
+        luggage = request.data.get("luggage_allowed")
+        
+        if start_location:
+            queryset = queryset.filter(start_location__icontains=start_location)
+
+        if end_location:
+            queryset = queryset.filter(end_location__icontains=end_location)
+
+        if date:
+            queryset = queryset.filter(departure_time__icontains=date)
+
+        if luggage is not None:
+            luggage_bool = str(luggage).lower() == "true"
+            queryset = queryset.filter(allow_luggage=luggage_bool)  
+
+        if gender_preference:
+            queryset = queryset.filter(gender_preference__iexact=gender_preference)
+
+        if available_seats:
+            try:
+                seats = int(available_seats)
+                queryset = queryset.filter(available_seats__gte=seats) # equal or greter then entered seats
+
+            except:
+                return Response({"status": "fail", "message": "available_seats must be an integer"}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not queryset.exists():
+            return Response({"status": "fail", "message": "No matching Carpools found"}, status=status.HTTP_404_NOT_FOUND)
+
+        activity(user, f"{request.user.first_name} sorted Carpools")
+        serializer = CreateCarpoolSerializer(queryset, many=True)
+
+        return Response({"status": "success", "message": "Carpools fetched", "Carpools": km_inr_format(serializer.data)}, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        return Response({"status": "error", "message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+#-------- CARPOOL CRUD --------#
+
+## Create Carpool (Anyone authenticated user can book carpool)
 @api_view(['POST'])
 @permission_classes([IsAuthenticatedCustom])
 def create_carpool(request):
@@ -86,7 +186,8 @@ def create_carpool(request):
     except Exception as e:
         return Response({"status":"error","message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-## Edit Carpool details
+## user who created carpool will assigned driver role and only he can with driver role UPDATE/DELETE/VIEW his carpool details.
+## Edit Carpool details 
 @api_view(['PUT'])
 @permission_classes([IsDriverCustom])
 def update_carpool(request):
@@ -224,139 +325,3 @@ def view_my_carpools(request):
     
     except Exception as e:
         return Response({"status":"error","message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
-# helpers.py
-def km_inr_format(data):
-    """
-    Add INR and KM units to contribution_per_km and distance_km.
-    Works with both dict (single object) and list (multiple objects).
-    """
-    if isinstance(data, list):
-        for c in data:
-            if c.get("contribution_per_km"):
-                c["contribution_per_km"] = f"{c['contribution_per_km']} INR"
-            if c.get("distance_km"):
-                c["distance_km"] = f"{c['distance_km']} KM"
-        return data
-    return data
-
-# Carpool list (public)
-@api_view(['GET'])
-@permission_classes([AllowAny])
-def carpool_detail(request):
-    try:
-        currunt_time = timezone.now()
-
-        ## show only upcoming rides for all users
-        public_carpools = CreateCarpool.objects.filter(departure_time__gte=currunt_time, available_seats__gt=0).order_by('-created_at')
-        
-        serializer = CreateCarpoolSerializer(public_carpools, many=True)
-        return Response({ "status": "success", "message": "carpool details fetched", "Carpools details": km_inr_format(serializer.data)}, status=status.HTTP_200_OK)
-
-    except Exception as e:
-        return Response({"status": "error", "message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
-# Search carpools (public) - show only upcoming rides with seats more than 0 , expired time ride hidden
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def search_carpools(request):
-
-    start = request.data.get("start_location", "")
-    end = request.data.get("end_location", "")
-    date = request.data.get("date")
-    luggage = request.data.get("luggage_allowed")
-    gender_preference = request.data.get("gender_preference")
-
-    try:
-        qs = CreateCarpool.objects.filter(available_seats__gt=0).order_by('-departure_time')
-        if start:
-            qs = qs.filter(start_location__icontains=start)
-        if end:
-            qs = qs.filter(end_location__icontains=end)
-        if date:
-            qs = qs.filter(departure_time__icontains=date)
-        if luggage is not None:
-            qs = qs.filter(luggage_allowed = bool(luggage))
-        if gender_preference:
-            qs = qs.filter(gender_preference__icontains=gender_preference)
-        if not qs.exists():
-            return Response({"status":"fail","message":"No carpools found"}, status=status.HTTP_404_NOT_FOUND)
-
-        serializer = CreateCarpoolSerializer(qs, many=True)
-        return Response({"status":"success","message":"Carpools fetched","Carpools": serializer.data}, status=status.HTTP_200_OK)
-
-    except Exception as e:
-        return Response({"status":"error","message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
-## sort carpools by date, location, available seats, departure time, arrivval time, seats.
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def sort_carpools_by(request):
-    user = request.user
-    try:
-
-        queryset = CreateCarpool.objects.filter(available_seats__gt=0).order_by('-departure_time')
-
-        start_location = request.data.get('start_location')
-        end_location = request.data.get('end_location')
-        available_seats = request.data.get('available_seats')
-        date = request.data.get('date')
-        gender_preference = request.data.get('gender_preference')
-        if start_location:
-            queryset = queryset.filter(start_location__icontains=start_location)
-
-        if end_location:
-            queryset = queryset.filter(end_location__icontains=end_location)
-
-        if date:
-            queryset = queryset.filter(departure_time__icontains=date)
-
-        if gender_preference:
-            queryset = queryset.filter(gender_preference__icontains=gender_preference)
-
-        if available_seats:
-            try:
-                seats = int(available_seats)
-                queryset = queryset.filter(available_seats__gte=seats) # equal or greter then entered seats
-
-            except:
-                return Response({"status": "fail", "message": "available_seats must be an integer"}, status=status.HTTP_400_BAD_REQUEST)
-
-        if not queryset.exists():
-            return Response({"status": "fail", "message": "No matching Carpools found"}, status=status.HTTP_404_NOT_FOUND)
-
-        activity(user, f"{request.user.first_name} sorted Carpools")
-        serializer = CreateCarpoolSerializer(queryset, many=True)
-
-        return Response({"status": "success", "message": "Carpools fetched", "Carpools": serializer.data}, status=status.HTTP_200_OK)
-
-    except Exception as e:
-        return Response({"status": "error", "message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-    
-## view each confirmed booking passenger for each carpool
-@api_view(['GET'])
-@permission_classes([IsDriverCustom])
-def view_booked_passenger(request):
-    user = request.user
-    
-    try:
-        carpools = CreateCarpool.objects.filter(carpool_creator_driver=user).order_by("-created_at")
-        
-        if not carpools.exists():
-            return Response({"status":"fail","message":"You have no carpools"}, status=status.HTTP_404_NOT_FOUND)
-
-        all_confirmed_bookings = []
-        for carpool in carpools:
-            confirmed_bookings = carpool.bookings.filter(booking_status="confirmed").order_by("booked_at")
-
-            if confirmed_bookings.exists():
-                serializer = BookingDetailSerializer(confirmed_bookings, many=True)
-                all_confirmed_bookings.extend(serializer.data)
-
-        if not all_confirmed_bookings:
-            return Response({"status":"fail","message":"No confirmed bookings found for your carpools"}, status=status.HTTP_404_NOT_FOUND)
-
-        return Response({"status":"success", "message":"Confirmed bookings fetched", "Data":{"confirmed bookings": all_confirmed_bookings}}, status=status.HTTP_200_OK)
-
-    except Exception as e:
-        return Response({"status":"error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

@@ -998,6 +998,20 @@ urlpatterns = [
 ]+ static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
 
+def km_inr_format(data):
+    """
+    Add INR and KM units to contribution_per_km and distance_km.
+    Works with both dict (single object) and list (multiple objects).
+    """
+    if isinstance(data, list):
+        for km_inr in data:
+            if km_inr.get("contribution_per_km"):
+                km_inr["contribution_per_km"] = f"{km_inr['contribution_per_km']} INR"
+            if km_inr.get("distance_km"):
+                km_inr["distance_km"] = f"{km_inr['distance_km']} KM"
+        return data
+    return data
+
 git rm -r --cached **/migrations/*
 git rm -r --cached media/
 git rm -r --cached db.sqlite3

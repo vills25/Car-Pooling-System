@@ -5,16 +5,15 @@ from .user_auth import activity
 from .custom_jwt_auth import IsAdminCustom
 from .models import Activity, User, CreateCarpool, Booking
 from .serializers import ActivitySerializer,UserSerializer, CreateCarpoolSerializer, BookingSerializer
+from .utils import user_is_admin
 
-def is_admin(user):
-    return user.role == "admin" or getattr(user, "is_superuser", False)
 
 ## View all User for admin view
 @api_view(['GET'])
 @permission_classes([IsAdminCustom])
 def admin_view_users(request):
     try:
-        if not is_admin(request.user):
+        if not user_is_admin(request.user):
             return Response({"status": "fail", "message": "Admin access required"}, status=status.HTTP_403_FORBIDDEN)
         users = User.objects.all().order_by("user_id")
         serializer = UserSerializer(users, many=True)
@@ -34,7 +33,7 @@ def view_all_activities(request):
 @api_view(['PUT'])
 @permission_classes([IsAdminCustom])
 def admin_active_deactive_user(request):
-    if not is_admin(request.user):
+    if not user_is_admin(request.user):
         return Response({"status": "fail", "message": "Admin access required"}, status=status.HTTP_403_FORBIDDEN)
     user_id = request.data.get("user_id")
     try:
@@ -50,7 +49,7 @@ def admin_active_deactive_user(request):
 @permission_classes([IsAdminCustom])
 def admin_view_carpools(request):
     try:
-        if not is_admin(request.user):
+        if not user_is_admin(request.user):
             return Response({"status": "fail", "message": "Admin access required"}, status=status.HTTP_403_FORBIDDEN)
         carpools = CreateCarpool.objects.all().order_by("-created_at")
         serializer = CreateCarpoolSerializer(carpools, many=True)
@@ -62,7 +61,7 @@ def admin_view_carpools(request):
 @permission_classes([IsAdminCustom])
 def admin_view_bookings(request):
     try:
-        if not is_admin(request.user):
+        if not user_is_admin(request.user):
             return Response({"status": "fail", "message": "Admin access required"}, status=status.HTTP_403_FORBIDDEN)
         bookings = Booking.objects.all().order_by("-booked_at")
         serializer = BookingSerializer(bookings, many=True)
