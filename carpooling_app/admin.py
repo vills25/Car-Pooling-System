@@ -10,7 +10,7 @@ class UserAdmin(admin.ModelAdmin):
     search_fields = ['username', 'email', 'first_name']
 
 class CreateCarpoolAdmin(admin.ModelAdmin):
-    list_display = ('createcarpool_id','carpool_creator_driver','start_location','end_location','contribution_per_km','total_passenger_allowed')
+    list_display = ('createcarpool_id','carpool_creator_driver','start_location','end_location','departure_time','contribution_per_km','total_passenger_allowed')
     search_fields = ['carpool_creator_driver','createcarpool_id']
 
 class BookingAdmin(admin.ModelAdmin):

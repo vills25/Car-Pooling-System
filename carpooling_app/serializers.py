@@ -54,10 +54,10 @@ class BookingDetailSerializer(serializers.ModelSerializer):
 
 ## Activity Serializer
 class ActivitySerializer(serializers.ModelSerializer):
-    user = UserSerializer(read_only=True)
+    # user = UserSerializer(read_only=True)
     class Meta:
         model = Activity
-        fields = ['date_time', 'user', 'details']
+        fields = ['date_time', 'details']
 
 ## Contact / Visitor Enquiry Serializer
 class ContactSerializer(serializers.ModelSerializer):

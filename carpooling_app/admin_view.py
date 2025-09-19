@@ -16,7 +16,7 @@ def admin_view_users(request):
         if not user_is_admin(request.user):
             return Response({"status": "fail", "message": "Admin access required"}, status=status.HTTP_403_FORBIDDEN)
         users = User.objects.all().order_by("user_id")
-        serializer = UserSerializer(users, many=True)
+        serializer = UserSerializer(users, many=True, context={'request': request})
         return Response({"status": "success", "Users": serializer.data}, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({"status":"error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -25,8 +25,8 @@ def admin_view_users(request):
 @api_view(["GET"])
 @permission_classes([IsAdminCustom]) 
 def view_all_activities(request):
-    logs = Activity.objects.all().order_by("-date_time")[:200]  # last 200 logs
-    serializer = ActivitySerializer(logs, many=True)
+    logs = Activity.objects.all().order_by("-date_time")
+    serializer = ActivitySerializer(logs, many=True, context={'request': request})
     return Response({"status": "success", "message": "Activity logs fetched", "logs data": serializer.data},status=status.HTTP_200_OK)
 
 ## Activate/Deactivate user

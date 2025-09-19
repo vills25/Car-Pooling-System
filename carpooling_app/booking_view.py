@@ -1,3 +1,4 @@
+from datetime import timedelta
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
@@ -5,9 +6,10 @@ from django.db import transaction
 from django.utils import timezone
 from .custom_jwt_auth import IsDriverOrPassengerCustom, IsDriverCustom
 from .models import CreateCarpool, Booking
-from .serializers import BookingDetailSerializer
+from .serializers import BookingDetailSerializer, BookingSerializer
 from .user_auth import activity
 from .utils import ride_status_function, send_booking_email
+from django.core.mail import send_mail
 
 # Book a seat in carpool (Only Logged-in(Registered) user can book only available upcomming carpools)
 @api_view(['POST'])
@@ -62,7 +64,7 @@ def book_carpool(request):
                 )
                 activity(user, f"{user.username} waitlisted booking {booking.booking_id} for carpool {carpool.createcarpool_id}")
                 send_booking_email(booking, "waitlisted")
-                serializer = BookingDetailSerializer(booking, context={'request': request})
+                serializer = BookingDetailSerializer(booking)
                 return Response({"status":"success","message":"Ride waitlisted","Booking Details":serializer.data}, status=status.HTTP_201_CREATED)
 
             booking = Booking.objects.create(
@@ -87,7 +89,7 @@ def book_carpool(request):
                 user_role_change.save()
 
             activity(user, f"{user.username} requested booking {booking.booking_id} for carpool {carpool.createcarpool_id}")
-            serializer = BookingDetailSerializer(booking, context={'request': request})
+            serializer = BookingDetailSerializer(booking)
             return Response({"status":"success","message":"Booking request sent to driver","Booking Details":serializer.data}, status=status.HTTP_201_CREATED)
 
     except CreateCarpool.DoesNotExist:
@@ -109,7 +111,7 @@ def my_bookings_info(request):
         past_bookings = Booking.objects.filter(passenger_name=user, carpool_driver_name__departure_time__lt=current_time).order_by("-carpool_driver_name__departure_time")
 
         data = {
-            "upcoming_bookings": BookingDetailSerializer(upcoming_bookings, many=True, context={"request": request}).data,
+            "upcoming_bookings": BookingDetailSerializer(upcoming_bookings, many=True).data,
             "past_bookings": BookingDetailSerializer(past_bookings, many=True, context={"request": request}).data
         }
         return Response({"status":"success","message":"Bookings fetched","Bookings":data}, status=status.HTTP_200_OK)
@@ -160,7 +162,7 @@ def update_my_booking(request):
 
             booking.save()
             activity(user, f"{user.username} updated booking {booking_id}")
-            serializer = BookingDetailSerializer(booking, context={"request": request})
+            serializer = BookingDetailSerializer(booking)
             return Response({"status":"success","message":"Booking updated","Booking":serializer.data}, status=status.HTTP_200_OK)
         
     except Booking.DoesNotExist:
@@ -239,7 +241,7 @@ def filter_bookings(request):
     elif sort_by == "earliest_ride_date":
         bookings = bookings.order_by("-carpool_driver_name__departure_time")
 
-    serializer = BookingDetailSerializer(bookings, many=True, context={"request": request})
+    serializer = BookingDetailSerializer(bookings, many=True)
     return Response({"status":"success","message":"Filtered and sorted bookings fetched","Bookings":serializer.data}, status=status.HTTP_200_OK)
 
 #-------- DRIVER ONLY --------#
@@ -255,7 +257,7 @@ def driver_view_booking_requests(request):
         if not bookings.exists():
             return Response({"status": "fail", "message": "No pending booking requests"}, status=status.HTTP_404_NOT_FOUND)
 
-        serializer = BookingDetailSerializer(bookings, many=True, context={"request": request})
+        serializer = BookingDetailSerializer(bookings, many=True)
         return Response({"status": "success", "Requests": serializer.data}, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({"status":"error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -342,3 +344,114 @@ def view_booked_passenger(request):
 
     except Exception as e:
         return Response({"status":"error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+## send email to passanger when ride is about to start before 40 minutes, if no journey is scheduled then return response as no upcoming rides.
+# @api_view(['GET'])
+# @permission_classes([IsDriverCustom])
+# def ride_reminder_notifications(request):
+#     user = request.user
+#     try:
+#         current_time = timezone.now()
+
+#         # Reminder window: 40 mins before departure (2 min buffer)
+#         reminder_time_start = current_time + timedelta(minutes=39)
+#         reminder_time_end = current_time + timedelta(minutes=41)
+#         # Get bookings where user is passenger & ride departure is near
+#         upcoming_bookings = Booking.objects.filter(passenger_name=user,carpool_driver_name__departure_time__gte=reminder_time_start,carpool_driver_name__departure_time__lte=reminder_time_end,
+#                                                     booking_status="confirmed").select_related("carpool_driver_name").order_by("carpool_driver_name__departure_time")
+#         if not upcoming_bookings.exists():
+#             return Response({"status": "fail", "message": "No upcoming rides found for reminders"}, status=status.HTTP_404_NOT_FOUND)
+
+#          # Send reminder emails
+#         for booking in upcoming_bookings:
+#             carpool = booking.carpool_driver_name
+#             if booking.passenger_name.email:
+#                 subject = f"Reminder: Your Ride Starts at {carpool.departure_time.strftime('%I:%M %p')}"
+#                 message = (
+#                     f"Hello {booking.passenger_name.username},\n\n"
+#                     f"This is a reminder that your ride from {booking.pickup_location or carpool.start_location} "
+#                     f"to {booking.drop_location or carpool.end_location} is scheduled to start at "
+#                     f"{carpool.departure_time.strftime('%I:%M %p')}.\n\n"
+#                     f"Please be ready on time!\n\n"
+#                     f"Safe travels,\nCarpool Team"
+#                 )
+#                 send_mail(subject, message, None, [booking.passenger_name.email], fail_silently=False)
+
+#         serializer = BookingSerializer(upcoming_bookings, many=True)
+#         return Response({"status": "success", "message": "Ride reminders sent successfully", "data": serializer.data}, status=status.HTTP_200_OK)
+    
+#     except Exception as e:
+#         return Response({"status":"error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+@permission_classes([IsDriverCustom])
+def ride_reminder_notifications(request):
+    user = request.user
+    print("------USER-----", user)
+    try:
+        current_time =timezone.now()
+        print("##### Current Time >>>", current_time)
+
+        # ✅ Get all future confirmed bookings
+        # future_bookings = Booking.objects.filter(
+        #     carpool_driver_name=user,
+        #     booking_status__iexact="confirmed",
+            # carpool_driver_name__departure_time__gt=current_time
+        # ).select_related("carpool_driver_name").order_by("carpool_driver_name__departure_time")
+
+
+        future_bookings = Booking.objects.filter(
+            carpool_driver_name__carpool_creator_driver=user,
+            booking_status__iexact="confirmed",
+            carpool_driver_name__departure_time__gt=current_time
+        ).select_related("carpool_driver_name").order_by("carpool_driver_name__departure_time")
+
+
+
+        print("##### future_bookings >>>", future_bookings)
+        # ✅ Filter manually using time_diff <= 40 logic
+        upcoming_bookings = []
+        # print("##### booking >>>", upcoming_bookings)
+        for booking in future_bookings:
+            print("##### booking >>>", booking)
+            carpool = booking.carpool_driver_name
+            time_diff = (carpool.departure_time - current_time).total_seconds() / 60
+
+            print("---------------", time_diff)
+            print("--------------111-", booking.booked_at)   # ✅ correct field
+
+            if 0 <= time_diff <= 40:   # only future rides within 40 min
+                upcoming_bookings.append(booking)
+                print("##### upcoming >>>", upcoming_bookings)
+
+        if upcoming_bookings:
+            for booking in upcoming_bookings:
+                carpool = booking.carpool_driver_name
+                if booking.passenger_name.email:
+                    subject = f"Reminder: Your Ride Starts at {carpool.departure_time.strftime('%I:%M %p')}"
+                    message = (
+                        f"Hello {booking.passenger_name.username},\n\n"
+                        f"This is a reminder that your ride from {booking.pickup_location or carpool.start_location} "
+                        f"to {booking.drop_location or carpool.end_location} is scheduled to start at "
+                        f"{carpool.departure_time.strftime('%I:%M %p')}.\n\n"
+                        f"Please be ready on time!\n\n"
+                        f"Safe travels,\nCarpool Team"
+                    )
+                    send_mail(subject, message, None, [booking.passenger_name.email], fail_silently=False)
+
+            serializer = BookingSerializer(upcoming_bookings, many=True)
+            return Response({"status": "success", "message": "Ride reminders sent successfully", "data": serializer.data}, status=status.HTTP_200_OK)
+
+        # ✅ Agar koi 40 min ke andar wali ride nahi hai → show next ride
+        next_booking = future_bookings.first()
+        if not next_booking:
+            return Response({"status": "fail", "message": "No upcoming rides found"}, status=status.HTTP_404_NOT_FOUND)
+
+        carpool = next_booking.carpool_driver_name
+        time_diff = int((carpool.departure_time - current_time).total_seconds() / 60)
+        return Response({"status": "info", "message": f"Your next ride starts at {carpool.departure_time.strftime('%I:%M %p')} (in {time_diff} minutes)"}, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+

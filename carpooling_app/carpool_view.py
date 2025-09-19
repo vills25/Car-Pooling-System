@@ -179,7 +179,7 @@ def create_carpool(request):
             if user_role_change.role != "driver":
                 user_role_change.role = "driver"
                 user_role_change.save()
-
+            activity(user, f"{user.username} created a new carpool {carpool.createcarpool_id} and assigned driver role")
             serializer = CreateCarpoolSerializer(carpool)
             return Response({"status":"success", "message":"Carpool added", "Carpool data": serializer.data}, status=status.HTTP_201_CREATED)
         
@@ -272,7 +272,7 @@ def update_carpool(request):
 
         carpool.save()
         activity(user, f"{user.username} updated carpool {carpool.createcarpool_id}")
-        serializer = CreateCarpoolSerializer(carpool, context={"request": request})
+        serializer = CreateCarpoolSerializer(carpool)
 
         return Response({"status":"success", "message":"Carpool updated", "data":{"carpool updated data": serializer.data} }, status=status.HTTP_200_OK)
         
@@ -321,6 +321,7 @@ def view_my_carpools(request):
             "upcoming_carpool": CreateCarpoolSerializer(upcoming_carpool, many=True).data,
             "past_carpool": CreateCarpoolSerializer(past_carpool, many=True).data
         }
+        
         return Response({"status":"success","message":"Carpools data fetched", "Data":{"Carpools": both_data}}, status=status.HTTP_200_OK)
     
     except Exception as e:
