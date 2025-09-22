@@ -1,0 +1,32 @@
+{
+  "status": "success",
+  "message": "Admin full report",
+  "data": {
+    "reports": {
+      "total_users": 9,
+      "total_carpools": 30,
+      "total_bookings": 18,
+      "top_drivers": [
+        ["anurag@5", 18],
+        ["pratham@3", 7],
+        ["vishal@6", 2],
+        ["venkat@9", 1],
+        ["mahipal@10", 1]
+      ],
+      "busiest_routes": [
+        ["Rangpur", "Amreli", 3],
+        ["Vadera", "Bhandariya", 2],
+        ["sitanagar", "vesu", 1],
+        ["RR mall", "surat central mall", 1],
+        ["Udhna collage", "Athvalines", 1]
+      ]
+    },
+    "dashboard_stats": {
+      "total_revenue": 2092.0,
+      "active_drivers": 6,
+      "weekly_bookings": 11,
+      "cancellation_rate": 0.0,
+      "highest_earner": { "username": "pratham@3", "amount": 1152.0 }
+    }
+  }
+}
