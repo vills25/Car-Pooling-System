@@ -17,19 +17,39 @@ from .utils import activity, send_otp_email, generate_otp, send_contact_email
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def register_user(request):
+    """
+    Register a new user.
 
+        Parameters:
+        username (str): required, username of the user
+        first_name (str): required, first name of the user
+        last_name (str): required, last name of the user
+        email (str): required, email of the user
+        password (str): required, password of the user
+        phone_number (str): required, phone number of the user
+        role (str): optional, role of the user, default is Passenger
+        address (str): optional, address of the user
+        gender (str): optional, gender of the user
+
+    Returns:
+    Response: a json response with the status, message and the user data
+    """
     enter_username = request.data.get('username')
     enter_first_name = request.data.get('first_name')
     enter_last_name = request.data.get('last_name')
     enter_email = request.data.get('email')
     enter_password = make_password(request.data["password"])
+    enter_confirm_password = request.data.get('confirm_password')
     enter_phone_number = request.data.get('phone_number')
     enter_role = request.data.get('role','Passenger')
     enter_address = request.data.get('address')
     enter_gender = request.data.get('gender')
 
-    if not request.data.get("username") or not request.data.get("email") or not request.data.get("password"):
+    if not request.data.get("username") or not request.data.get("email") or not request.data.get("password") or not request.data.get("confirm_password"):
         return Response({"status":"fail","message":"username, email, password required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    if enter_password != enter_confirm_password:
+        return Response({"status":"fail","message":"password and confirm password does not match"}, status=status.HTTP_400_BAD_REQUEST)
 
     if User.objects.filter(username=request.data["username"]).exists():
         return Response({"status":"fail","message":"Username already exist, try some diffrent username."}, status=status.HTTP_400_BAD_REQUEST)
@@ -65,6 +85,19 @@ def register_user(request):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def login_user(request):
+    """
+    Login user.
+
+    Parameters:
+    username (str): required, username of the user
+    password (str): required, password of the user
+
+    Returns:
+    Response: a json response with the status, message, access token and refresh token
+    If the login is successful, it will return a 200 status code with a success message and the access token and refresh token.
+    If the login fails, it will return a 401 status code with an invalid credentials message.
+    If the user is not found, it will return a 404 status code with an user not found message.
+    """
     username = request.data.get("username")
     password = request.data.get("password")
 
@@ -105,6 +138,16 @@ def login_user(request):
 @permission_classes([IsAuthenticatedCustom])
 def logout_user(request):
 
+    """
+    Logout user from the system.
+
+    Parameters:
+    request (HttpRequest): Request object passed in by the Django framework.
+    refresh_token (str): The refresh token to blacklist.
+
+    Returns:
+    Response: A JSON response with the status, message and data.
+    """
     user = request.user
     refresh_token = request.data.get('refresh_token')
 
@@ -130,6 +173,18 @@ def logout_user(request):
 @permission_classes([IsAuthenticatedCustom])
 def view_profile(request):
 
+    """
+    Fetch user profile data.
+
+    Parameters:
+    request (HttpRequest): Request object passed in by the Django framework.
+
+    Returns:
+    Response: A JSON response with the status, message and data.
+    If the user is not found, it will return a 404 status code with an user not found message.
+    If the user is found, it will return a 200 status code with a success message and the user profile data.
+    If any error occurs, it will return a 400 status code with an error message.
+    """
     user = request.user
 
     try:
@@ -153,6 +208,19 @@ def view_profile(request):
 @api_view(['PUT'])
 @permission_classes([IsAuthenticatedCustom])
 def update_profile(request):
+    """
+    Update the user profile data.
+
+    Parameters:
+    request (HttpRequest): Request object passed in by the Django framework.
+    
+    Returns:
+    Response: A JSON response with the status, message and data.
+    If the user is not found, it will return a 404 status code with an user not found message.
+    If the user is found, it will return a 200 status code with a success message and the updated user profile data.
+    If any error occurs, it will return a 400 status code with an error message.
+
+    """
     try:
         user = request.user
         
@@ -217,6 +285,20 @@ def update_profile(request):
 @permission_classes([IsAuthenticatedCustom])
 def delete_profile(request):
 
+    """
+    Delete a user profile.
+
+    This API will delete a user profile.
+    It will only delete the profile if the user is the creator of the profile or an admin.
+
+    Parameters:
+    user_id: int (required)
+
+    Returns:
+    A JSON response with the status, message and data of the deleted user.
+    If the delete is successful, it will return a 200 status code with a success message and the deleted user details.
+    If the delete fails, it will return a 400 status code with an error message and the error details.
+    """
     user_id = request.data.get('user_id')
 
     if not user_id:
@@ -240,6 +322,20 @@ def delete_profile(request):
 @permission_classes([AllowAny])
 def forgot_password(request):
     
+    """
+    Forgot Password View
+
+    This API will send an OTP to the user's email id if the user exists.
+    The OTP will be valid for 5 minutes.
+
+    Parameters:
+    email (str): required, email of the user
+
+    Returns:
+    Response: a json response with the status, message and data of the user.
+    If the OTP is sent successfully, it will return a 200 status code with a success message and the email id of the user.
+    If the OTP sending fails, it will return a 404 status code with an error message if the user is not found.
+    """
     email = request.data.get("email")
 
     if not email:
@@ -260,9 +356,24 @@ def forgot_password(request):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def reset_password(request):
+    """
+    Resets the password of the user.
+
+    Parameters:
+    email (str): required, email of the user
+    otp (str): required, OTP sent to the user's email id
+    new_password (str): required, new password of the user
+    confirm_new_password (str): required, confirm new password of the user
+
+    Returns:
+    Response: a json response with the status, message and data of the user.
+    If the password reset is successful, it will return a 200 status code with a success message and the email id of the user.
+    If the password reset fails, it will return a 404 status code with an error message if the user is not found, or a 400 status code with an error message if the OTP is invalid.
+    """
     email = request.data.get("email")
     otp = request.data.get("otp")
     new_password = request.data.get("new_password")
+    confirm_new_password = request.data.get("confirm_new_password")
 
     if not email or not otp or not new_password:
         return Response({"status":"fail","message":"email, otp, new_password required"}, status=status.HTTP_400_BAD_REQUEST)
@@ -272,6 +383,8 @@ def reset_password(request):
             return Response({"status":"fail","message":"Invalid OTP"}, status=status.HTTP_400_BAD_REQUEST)
 
         user = User.objects.get(email=email)
+        if new_password != confirm_new_password:
+            return Response({"status":"fail","message":"New password and confirm password does not match"}, status=status.HTTP_400_BAD_REQUEST)
         user.password = make_password(new_password)
         user.save()
         return Response({"status":"success","message":"Password reset successfully"}, status=status.HTTP_200_OK)
@@ -282,10 +395,21 @@ def reset_password(request):
     except Exception as e:
         return Response({"status":"fail","message":str(e)}, status=status.HTTP_400_BAD_REQUEST)
     
-## contact us view using Contact model, Visitor Enquiry, send all fields detail in emails too.
+## contact us form
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def contact_us(request):
+    """
+    Contact us view using Contact model, Visitor Enquiry, send all fields detail in emails too.
+    
+    Parameters:
+    name, email, phone_number and your_message required in str format
+    
+    Returns:
+    Response: a json response with the status, message and data of the contact form.
+    If the contact form submission is successful, it will return a 200 status code with a success message.
+    If the contact form submission fails, it will return a 400 status code with an error message and the error details.
+    """
     name = request.data.get("name")
     email = request.data.get("email")
     phone_number = request.data.get("phone_number")
