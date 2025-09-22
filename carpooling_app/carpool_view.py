@@ -112,8 +112,8 @@ def sort_carpools_by(request):
 
         queryset = CreateCarpool.objects.filter(available_seats__gt=0).order_by('-departure_time')
 
-        start_location = request.data.get('star_location')
-        end_location = request.data.get('end_loctation')
+        start_location = request.data.get('start_location')
+        end_location = request.data.get('end_location')
         date = request.data.get('date')
         available_seats = request.data.get('available_seats')
         gender_preference = request.data.get('gender_preference')

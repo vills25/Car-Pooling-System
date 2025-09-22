@@ -1,3 +1,6 @@
+import email
+from tkinter import PhotoImage
+from django.db.models import Q
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -38,8 +41,6 @@ def register_user(request):
     enter_first_name = request.data.get('first_name')
     enter_last_name = request.data.get('last_name')
     enter_email = request.data.get('email')
-    enter_password = make_password(request.data["password"])
-    enter_confirm_password = request.data.get('confirm_password')
     enter_phone_number = request.data.get('phone_number')
     enter_role = request.data.get('role','Passenger')
     enter_address = request.data.get('address')
@@ -48,8 +49,13 @@ def register_user(request):
     if not request.data.get("username") or not request.data.get("email") or not request.data.get("password") or not request.data.get("confirm_password"):
         return Response({"status":"fail","message":"username, email, password required"}, status=status.HTTP_400_BAD_REQUEST)
 
-    if enter_password != enter_confirm_password:
-        return Response({"status":"fail","message":"password and confirm password does not match"}, status=status.HTTP_400_BAD_REQUEST)
+    raw_password = request.data.get("password")
+    enter_confirm_password = request.data.get("confirm_password")
+
+    if raw_password != enter_confirm_password:
+        return Response({"status":"fail","message":"Password and confirm password do not match"}, status=status.HTTP_400_BAD_REQUEST)
+
+    enter_password = make_password(raw_password)
 
     if User.objects.filter(username=request.data["username"]).exists():
         return Response({"status":"fail","message":"Username already exist, try some diffrent username."}, status=status.HTTP_400_BAD_REQUEST)
@@ -98,11 +104,11 @@ def login_user(request):
     If the login fails, it will return a 401 status code with an invalid credentials message.
     If the user is not found, it will return a 404 status code with an user not found message.
     """
-    username = request.data.get("username")
+    username = request.data.get("username/email/phone_number")
     password = request.data.get("password")
 
     try:
-        user = User.objects.get(username=username)
+        user = User.objects.filter( Q(username=username) | Q(email=username) | Q(phone_number=username)).first()
 
         if not check_password(password, user.password):
             return Response({"status":"fail","message":"Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
@@ -372,8 +378,9 @@ def reset_password(request):
     """
     email = request.data.get("email")
     otp = request.data.get("otp")
-    new_password = request.data.get("new_password")
-    confirm_new_password = request.data.get("confirm_new_password")
+    raw_password = request.data.get("new_password")
+    confirm_password = request.data.get("confirm_new_password")
+    new_password = check_password(raw_password, confirm_password)
 
     if not email or not otp or not new_password:
         return Response({"status":"fail","message":"email, otp, new_password required"}, status=status.HTTP_400_BAD_REQUEST)
@@ -381,10 +388,11 @@ def reset_password(request):
     try:
         if request.session.get("reset_email") != email or request.session.get("reset_otp") != otp:
             return Response({"status":"fail","message":"Invalid OTP"}, status=status.HTTP_400_BAD_REQUEST)
-
+        
         user = User.objects.get(email=email)
-        if new_password != confirm_new_password:
-            return Response({"status":"fail","message":"New password and confirm password does not match"}, status=status.HTTP_400_BAD_REQUEST)
+
+        if raw_password != confirm_password:
+            return Response({"status":"fail","message":"Password and confirm password not matched"}, status=status.HTTP_400_BAD_REQUEST)
         user.password = make_password(new_password)
         user.save()
         return Response({"status":"success","message":"Password reset successfully"}, status=status.HTTP_200_OK)

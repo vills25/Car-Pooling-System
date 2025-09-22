@@ -8,10 +8,25 @@ from django.utils.html import strip_tags
 from django.conf import settings
 
 def user_is_admin(user):
+    """
+    Check if a user is an admin or has superuser privileges.
+
+    Parameters: user (User): The user to check.
+
+    Returns:
+    bool: True if the user is an admin or has superuser privileges, False otherwise.
+    """
     return user.role == "admin" or getattr(user, "is_superuser", False)
 
 ## Save activity log
 def activity(user, details):
+    """
+    Save activity log for user.
+
+    Parameters:
+    user (User): The user for which the activity log is being saved.
+    details (str): The details of the activity log.
+    """
     try:
         Activity.objects.create(user=user, details=details)
     except Exception as e:
@@ -23,6 +38,16 @@ def generate_otp():
 
 ## Send OTP email
 def send_otp_email(email, otp):
+    """
+    Send an email with an OTP to the given email address.
+
+    Parameters:
+    email (str): The email address to which the OTP should be sent.
+    otp (str): The OTP to be sent.
+
+    Returns:
+    bool: True if the email is sent successfully, False otherwise.
+    """
     subject = "Your OTP Code"
     message = f"Your OTP for password reset is: {otp}. It will expire in 10 minutes."
     from_email = "vishalsohaliya25@gmail.com"
@@ -35,6 +60,13 @@ def send_otp_email(email, otp):
 
 ## Add INR and KM units to contribution_per_km and distance_km.
 def km_inr_format(data):
+    """
+    Add INR and KM units to contribution_per_km and distance_km.
+    Parameters:
+    data (list or dict): The data to be formatted. If it is a list, all the items in it will be formatted.
+    Returns:
+    list or dict: The formatted data.
+    """
     if isinstance(data, list):
         for km_inr in data:
             if km_inr.get("contribution_per_km"):
@@ -146,6 +178,15 @@ def send_booking_email(booking, status_type):
 
 ## Helper function for Ride status 
 def ride_status_function(request):
+    """
+    This function is used to update the ride status of all bookings based on the current time.
+    It loops through all bookings and checks the current time against the departure and arrival times of the carpool.
+    If the booking status is "cancelled", the ride status is set to "cancelled".
+    If the current time is greater than the departure time, the ride status is set to "upcoming".
+    If the current time is between the departure and arrival times, the ride status is set to "active".
+    If the current time is greater than or equal to the arrival time, the ride status is set to "completed".
+
+    """
     currunt_time = timezone.now()
     bookings = Booking.objects.all()
 
@@ -169,6 +210,15 @@ def ride_status_function(request):
 
 ## send/receive contacts form from user to admin.
 def send_contact_email(name, email, phone_number, your_message):
+    """
+    Send an email to admin with contact form details.
+
+    Parameters:
+    name (str): Name of the user who submitted the contact form.
+    email (str): Email of the user who submitted the contact form.
+    phone_number (str): Phone number of the user who submitted the contact form.
+    your_message (str): Message from the user who submitted the contact form.
+    """
     subject = "Contact us form"
     message = f"Name: {name}\nEmail: {email}\nPhone Number: {phone_number}\nMessage: {your_message}"
     from_email = settings.DEFAULT_FROM_EMAIL
