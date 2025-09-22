@@ -11,7 +11,7 @@ from django.contrib.auth.hashers import make_password
 from .models import *
 from .serializers import *
 from .custom_jwt_auth import IsAuthenticatedCustom
-from .utils import activity, send_otp_email, generate_otp
+from .utils import activity, send_otp_email, generate_otp, send_contact_email
 
 ## Register User (Sign-Up)
 @api_view(['POST'])
@@ -278,3 +278,27 @@ def reset_password(request):
     
     except User.DoesNotExist:
         return Response({"status":"fail","message":"User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    except Exception as e:
+        return Response({"status":"fail","message":str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    
+## contact us view using Contact model, Visitor Enquiry, send all fields detail in emails too.
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def contact_us(request):
+    name = request.data.get("name")
+    email = request.data.get("email")
+    phone_number = request.data.get("phone_number")
+    your_message = request.data.get("your_message")
+
+    if not name or not email or not phone_number or not your_message:
+        return Response({"status":"fail","message":"name, email, phone_number, message required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        contact = Contact.objects.create(name=name, email=email, phone_number=phone_number, your_message=your_message)
+        contact.save()
+        send_contact_email(name, email, phone_number, your_message)
+        return Response({"status":"success","message":"contact form submitted successfully"}, status=status.HTTP_200_OK)
+    
+    except Exception as e:
+        return Response({"status":"error","message":str(e)}, status=status.HTTP_400_BAD_REQUEST)

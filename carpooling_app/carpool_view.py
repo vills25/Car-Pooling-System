@@ -1,8 +1,9 @@
+from datetime import timedelta
 from .user_auth import activity
 from .utils import km_inr_format
 from .models import CreateCarpool
-from .serializers import CreateCarpoolSerializer, BookingDetailSerializer
-from .custom_jwt_auth import IsDriverCustom, IsAuthenticatedCustom
+from .serializers import CreateCarpoolSerializer
+from .custom_jwt_auth import IsDriverCustom, IsAuthenticatedCustom, IsDriverOrPassengerCustom
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
@@ -17,14 +18,32 @@ from rest_framework.permissions import AllowAny
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def carpool_detail(request):
+    """
+    This API will fetch the details of all the public carpools created by drivers.
+    It will only show the upcoming carpools with available seats more than 0.
+    The carpools will be sorted in descending order of departure time.
+    - Returns a JSON response with the status, message and data of the public carpools.
+    - The data will contain the details of the carpools in the following format: 
+        {
+            "Carpools details": [
+                {
+                    "createcarpool_id": ...,
+                    "carpool_creator_driver": ...,
+                    "start_location": ...,
+                    "end_location": ...,
+                    "departure_time": ...,
+                    "available_seats": ...,
+                }
+            ]
+        }
+    - If there are no public carpools available, it will return a 404 status code with a message "No carpools found".
+    """
     try:
-        current_time = timezone.localtime(timezone.now())
-
-        ## show only upcoming rides for all users
+        current_time = timezone.now()
         public_carpools = CreateCarpool.objects.filter(departure_time__gte=current_time, available_seats__gt=0).order_by('-created_at')
-        
+
         serializer = CreateCarpoolSerializer(public_carpools, many=True)
-        return Response({ "status": "success", "message": "carpool details fetched", "Carpools details": km_inr_format(serializer.data)}, status=status.HTTP_200_OK)
+        return Response({ "status": "success", "message": "carpool details fetched", "data":{"Carpools details": km_inr_format(serializer.data)}}, status=status.HTTP_200_OK)
 
     except Exception as e:
         return Response({"status": "error", "message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -34,6 +53,18 @@ def carpool_detail(request):
 @permission_classes([AllowAny])
 def search_carpools(request):
 
+    """
+    Search carpools based on start location, end location and date.
+    
+    Parameters:
+    start_location (string): The start location of the carpools.
+    end_location (string): The end location of the carpools.
+    date (string): The date on which the carpools are available.
+    
+    Returns:
+    Response: A JSON response with the status, message and data of the searched carpools.
+    If there are no carpools found, it will return a 404 status code with a message "No carpools found".
+    """
     start = request.data.get("start_location")
     end = request.data.get("end_location")
     date = request.data.get("date")
@@ -52,7 +83,7 @@ def search_carpools(request):
             return Response({"status":"fail","message":"No carpools found"}, status=status.HTTP_404_NOT_FOUND)
 
         serializer = CreateCarpoolSerializer(qs, many=True)
-        return Response({"status":"success","message":"Carpools fetched","Carpools": km_inr_format(serializer.data)}, status=status.HTTP_200_OK)
+        return Response({"status":"success","message":"Carpools fetched","data":{"Carpools": km_inr_format(serializer.data)}}, status=status.HTTP_200_OK)
 
     except Exception as e:
         return Response({"status":"error","message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -61,13 +92,28 @@ def search_carpools(request):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def sort_carpools_by(request):
+    """
+    Sort carpools based on the given parameters.
+
+    Parameters:
+    start_location (string): The start location of the carpools.
+    end_location (string): The end location of the carpools.
+    date (string): The date on which the carpools are available.
+    available_seats (integer): The minimum number of available seats in the carpools.
+    gender_preference (string): The preferred gender of the driver.
+    luggage (boolean): Whether luggage is allowed or not.
+
+    Returns:
+    Response: A JSON response with the status, message and data of the sorted carpools.
+    If there are no carpools found, it will return a 404 status code with a message "No matching Carpools found".
+    """
     user = request.user
     try:
 
         queryset = CreateCarpool.objects.filter(available_seats__gt=0).order_by('-departure_time')
 
-        start_location = request.data.get('start_location')
-        end_location = request.data.get('end_location')
+        start_location = request.data.get('star_location')
+        end_location = request.data.get('end_loctation')
         date = request.data.get('date')
         available_seats = request.data.get('available_seats')
         gender_preference = request.data.get('gender_preference')
@@ -103,7 +149,7 @@ def sort_carpools_by(request):
         activity(user, f"{request.user.first_name} sorted Carpools")
         serializer = CreateCarpoolSerializer(queryset, many=True)
 
-        return Response({"status": "success", "message": "Carpools fetched", "Carpools": km_inr_format(serializer.data)}, status=status.HTTP_200_OK)
+        return Response({"status": "success", "message": "Carpools fetched", "data":{"Carpools": km_inr_format(serializer.data)}}, status=status.HTTP_200_OK)
 
     except Exception as e:
         return Response({"status": "error", "message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -115,8 +161,39 @@ def sort_carpools_by(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticatedCustom])
 def create_carpool(request):
-    # get user
+    """
+    Create a new carpool by driver.
+
+    Parameters:
+    start_location (str): required, starting location of the carpool
+    end_location (str): required, ending location of the carpool
+    departure_time (datetime): required, departure time of the carpool
+    arrival_time (datetime): required, arrival time of the carpool
+    available_seats (int): required, number of available seats in the carpool
+    total_passenger_allowed (int): required, total number of passengers allowed in the carpool
+    contribution_per_km (float): required, contribution per km in the carpool
+    distance_km (float): required, distance of the carpool in km
+    add_note (str): optional, additional information about the carpool
+    allow_luggage (bool): optional, whether the carpool allows luggage
+    gender_preference (str): optional, gender preference of the carpool
+    contact_info (str): optional, contact information of the carpool
+    car_model (str): optional, car model of the carpool
+    car_number (str): optional, car number of the carpool
+
+    Returns:
+    Response: a json response with the status, message and the carpool data
+    """
     user = request.user
+    
+    current_time = timezone.now()
+    two_hours_ahead = current_time + timedelta(hours=1)
+
+    ## check if user already has an active or upcoming journey
+    check_upcoming_journey = CreateCarpool.objects.filter(carpool_creator_driver=user, departure_time__lte=two_hours_ahead, arrival_time__gte=current_time).exists()
+
+    if check_upcoming_journey:
+        return Response(
+            {"status": "fail", "message": "You already have an active or upcoming journey within 1 hour. Cannot create new journey."},status=status.HTTP_400_BAD_REQUEST)
 
     # input fields
     get_start_location = request.data.get('start_location')
@@ -181,7 +258,7 @@ def create_carpool(request):
                 user_role_change.save()
             activity(user, f"{user.username} created a new carpool {carpool.createcarpool_id} and assigned driver role")
             serializer = CreateCarpoolSerializer(carpool)
-            return Response({"status":"success", "message":"Carpool added", "Carpool data": serializer.data}, status=status.HTTP_201_CREATED)
+            return Response({"status":"success", "message":"Carpool added", "data":{"Carpool data": serializer.data}}, status=status.HTTP_201_CREATED)
         
     except Exception as e:
         return Response({"status":"error","message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -191,6 +268,35 @@ def create_carpool(request):
 @api_view(['PUT'])
 @permission_classes([IsDriverCustom])
 def update_carpool(request):
+    """
+    Update the details of a carpool created by the user.
+
+    This API will update the details of a carpool created by the user.
+    It will only update the details of the carpool if the user is the creator of the carpool.
+    It will also validate the input fields and return an error if any of the fields are invalid.
+
+    Parameters:
+    createcarpool_id: int (required)
+    available_seats: int (optional)
+    start_location: str (optional)
+    end_location: str (optional)
+    departure_time: datetime (optional)
+    arrival_time: datetime (optional)
+    contribution_per_km: float (optional)
+    distance_km: float (optional)
+    add_note: str (optional)
+    allow_luggage: bool (optional)
+    gender_preference: str (optional)
+    contact_info: str (optional)
+    car_model: str (optional)
+    car_number: str (optional)
+    total_passenger_allowed: int (optional)
+
+    Returns:
+    A JSON response with the status, message and data of the updated carpool.
+    If the update is successful, it will return a 200 status code with a success message and the updated carpool details.
+    If the update fails, it will return a 400 status code with an error message and the error details.
+    """
     user = request.user
     
     # Extract all input fields
@@ -286,6 +392,21 @@ def update_carpool(request):
 @api_view(['DELETE'])
 @permission_classes([IsDriverCustom])
 def delete_carpool(request):
+    """
+    Delete a carpool created by the user.
+
+    This API will delete a carpool created by the user.
+    It will only delete the carpool if the user is the creator of the carpool or an admin.
+    It will also validate the input fields and return an error if any of the fields are invalid.
+
+    Parameters:
+    carpool_id: int (required)
+
+    Returns:
+    A JSON response with the status, message and data of the deleted carpool.
+    If the delete is successful, it will return a 200 status code with a success message and the deleted carpool details.
+    If the delete fails, it will return a 400 status code with an error message and the error details.
+    """
     user = request.user
     get_carpool_id = request.data.get("carpool_id")
     if not get_carpool_id:
@@ -308,11 +429,17 @@ def delete_carpool(request):
     
 ## Driver: view my carpools
 @api_view(['GET'])
-@permission_classes([IsDriverCustom])
+@permission_classes([IsDriverOrPassengerCustom])
 def view_my_carpools(request):
+    """
+    This API will fetch the details of all the carpools created by the logged-in driver.
+    It will return two lists of carpools: one for upcoming carpools and one for past carpools.
+    The carpools will be sorted in ascending order of departure time for upcoming carpools and in descending order of departure time for past carpools.
+    - Returns a JSON response with the status, message and data of the carpools.
+    - If there are no carpools found, it will return a 404 status code with a message "No carpools found".
+    """
     user = request.user
-    # if user.role != "driver":
-    #     return Response({"status":"fail","message":"only drivers can view their carpools"}, status=status.HTTP_403_FORBIDDEN)
+
     try:
         currunt_time = timezone.now()
         upcoming_carpool = CreateCarpool.objects.filter(carpool_creator_driver=user, departure_time__gte=currunt_time).order_by("departure_time")

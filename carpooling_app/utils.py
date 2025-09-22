@@ -3,6 +3,9 @@ import random
 from django.core.mail import send_mail
 from django.conf import settings
 from carpooling_app.models import Activity, Booking
+from django.core.mail import EmailMultiAlternatives
+from django.utils.html import strip_tags
+from django.conf import settings
 
 def user_is_admin(user):
     return user.role == "admin" or getattr(user, "is_superuser", False)
@@ -44,38 +47,106 @@ def km_inr_format(data):
 ## send Email for booking confirmed / rejected / waitlisted / cancelled
 def send_booking_email(booking, status_type):
     subject = ""
-    message = ""
+    html_message = ""
     passenger_email = booking.passenger_name.email
     carpool = booking.carpool_driver_name
 
     if status_type == "confirmed":
-        subject = "Carpool Booking Confirmed"
-        message = (
-            f"Hello {booking.passenger_name.first_name},\n\n"
-            f"Your Booking ID: {booking.booking_id} has been confirmed.\n\n"
-            f"Journey From: {carpool.start_location} To {carpool.end_location}\n"
-            f"Departure time: {carpool.departure_time}\nSeats booked: {booking.seat_book}\n"
-            f"Total fare price: {booking.contribution_amount} INR\n\n Happy Journey!\n\nCustomer Helpline: 1800-000-000 or +91 9856896548"
-        )
+        subject = "✅ Carpool Booking Confirmed"
+        html_message = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; line-height:1.6; color:#333;">
+            <h2 style="color: #27AE60;">✅ Booking Confirmed</h2>
+            <p>Hello <b>{booking.passenger_name.first_name}</b>,</p>
+            <p>Your booking has been successfully confirmed.</p>
+
+            <table style="border-collapse: collapse; margin: 10px 0; width: 100%;">
+                <tr>
+                    <td style="padding: 6px; font-weight: bold;">Booking ID:</td>
+                    <td style="padding: 6px;">{booking.booking_id}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 6px; font-weight: bold;">Journey:</td>
+                    <td style="padding: 6px;">{carpool.start_location} ➝ {carpool.end_location}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 6px; font-weight: bold;">Departure Time:</td>
+                    <td style="padding: 6px;">{carpool.departure_time.strftime('%d %b %Y, %I:%M %p')}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 6px; font-weight: bold;">Seats Booked:</td>
+                    <td style="padding: 6px;">{booking.seat_book}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 6px; font-weight: bold;">Total Fare:</td>
+                    <td style="padding: 6px;">₹ {booking.contribution_amount}</td>
+                </tr>
+            </table>
+
+            <p style="margin-top: 10px;">We wish you a <b>Happy Journey!</b> 🚗</p>
+            <p style="font-size: 12px; color: #888;">Customer Helpline: 1800-000-000 | +91 9856896548</p>
+        </body>
+        </html>
+        """
+
     elif status_type == "rejected":
-        subject = "Carpool Booking Rejected"
-        message = f"Hello {booking.passenger_name.first_name},\n\nYour Booking ID: {booking.booking_id} was rejected by the driver."
+        subject = "❌ Carpool Booking Rejected"
+        html_message = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; color:#333;">
+            <h2 style="color: #E74C3C;">❌ Booking Rejected</h2>
+            <p>Hello <b>{booking.passenger_name.first_name}</b>,</p>
+            <p>Your booking <b>ID: {booking.booking_id}</b> was rejected by the driver.</p>
+            <p style="font-size: 12px; color: #888;">You can try booking another available ride.</p>
+        </body>
+        </html>
+        """
 
     elif status_type == "waitlisted":
-        subject = "Carpool Booking Waitlisted"
-        message = f"Hello {booking.passenger_name.first_name},\n\nYour Booking ID: {booking.booking_id} is waitlisted due to no available seats.\n We will get back to you shortly or you can cancle and find another available ride.\n\n Customer Helpline: 1800-000-000 or +91 9856896548"
+        subject = "⏳ Carpool Booking Waitlisted"
+        html_message = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; color:#333;">
+            <h2 style="color: #F39C12;">⏳ Booking Waitlisted</h2>
+            <p>Hello <b>{booking.passenger_name.first_name}</b>,</p>
+            <p>Your booking <b>ID: {booking.booking_id}</b> is currently waitlisted due to no available seats.</p>
+            <p>You can wait for availability or cancel and find another ride.</p>
+            <p style="font-size: 12px; color: #888;">Customer Helpline: 1800-000-000 | +91 9856896548</p>
+        </body>
+        </html>
+        """
 
     elif status_type == "cancelled":
-        subject = "Carpool Booking Cancelled"
-        message = f"Hello {booking.passenger_name.first_name},\n\nYour Booking ID: {booking.booking_id} has been cancelled.\n Carpool Management System,\n Customer Helpline: 1800-000-000 or +91 9856896548"
+        subject = "🚫 Carpool Booking Cancelled"
+        html_message = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; color:#333;">
+            <h2 style="color: #C0392B;">🚫 Booking Cancelled</h2>
+            <p>Hello <b>{booking.passenger_name.first_name}</b>,</p>
+            <p>Your booking <b>ID: {booking.booking_id}</b> has been cancelled.</p>
+            <p style="font-size: 12px; color: #888;">Customer Helpline: 1800-000-000 | +91 9856896548</p>
+        </body>
+        </html>
+        """
+
     try:
-        send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [passenger_email])
+        # fallback plain text
+        text_message = strip_tags(html_message)
+
+        email = EmailMultiAlternatives(
+            subject=subject,
+            body=text_message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[passenger_email]
+        )
+        email.attach_alternative(html_message, "text/html")
+        email.send()
     except Exception as e:
         print("Email send failed:", e)
 
 ## Helper function for Ride status 
 def ride_status_function(request):
-    currunt_time = timezone.localtime(timezone.now())
+    currunt_time = timezone.now()
     bookings = Booking.objects.all()
 
     for booking in bookings:
@@ -95,3 +166,11 @@ def ride_status_function(request):
             booking.ride_status = "completed"
 
         booking.save()
+
+## send/receive contacts form from user to admin.
+def send_contact_email(name, email, phone_number, your_message):
+    subject = "Contact us form"
+    message = f"Name: {name}\nEmail: {email}\nPhone Number: {phone_number}\nMessage: {your_message}"
+    from_email = settings.DEFAULT_FROM_EMAIL
+    to_email = settings.DEFAULT_FROM_EMAIL
+    send_mail(subject, message, from_email, [to_email])

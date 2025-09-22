@@ -71,7 +71,8 @@ class Contact(models.Model):
     contact_id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=50)
     email = models.EmailField()
-    message = models.TextField()
+    phone_number = models.CharField(max_length=12, unique=True)
+    your_message = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

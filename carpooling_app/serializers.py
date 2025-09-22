@@ -19,7 +19,7 @@ class CreateCarpoolSerializer(serializers.ModelSerializer):
     class Meta:
         model = CreateCarpool
         fields = ['createcarpool_id', 'driver', 'start_location', 'end_location','departure_time', 'arrival_time','available_seats', 'total_passenger_allowed','contribution_per_km', 
-                  'distance_km','add_note', 'allow_luggage','gender_preference','contact_info','car_model', 'car_number', 'created_at','updated_at']
+                  'distance_km','add_note', 'allow_luggage','gender_preference','contact_info','car_model', 'car_number', 'created_at','updated_at', 'updated_by']
 
 class CarpoolDetailSerializer(serializers.ModelSerializer):
     carpool_driver_name = serializers.SerializerMethodField()
@@ -63,4 +63,4 @@ class ActivitySerializer(serializers.ModelSerializer):
 class ContactSerializer(serializers.ModelSerializer):
     class Meta:
         model = Contact
-        fields = ['contact_id', 'name', 'email', 'message', 'created_at']
+        fields = ['contact_id', 'name', 'email', 'phone_number','your_message', 'created_at']

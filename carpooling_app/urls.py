@@ -16,6 +16,7 @@ urlpatterns = [
     path('profile/delete-profile/', delete_profile),
     path('profile/forgot-password/', forgot_password),
     path('profile/reset-password/', reset_password),
+    path('profile/contact-us/', contact_us),
 
     #-------- ADMIN --------#
     path('admin/view-users/', admin_view_users),
@@ -23,6 +24,7 @@ urlpatterns = [
     path('admin/user-action/', admin_active_deactive_user),
     path('admin/carpools/', admin_view_carpools),
     path('admin/carpool-bookings/', admin_view_bookings),
+    path('admin/reports/', admin_full_report),
 
     #-------- PUBLIC --------#
     path("carpool/detail/",carpool_detail), 
