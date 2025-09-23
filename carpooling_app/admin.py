@@ -21,7 +21,17 @@ class ActivityAdmin(admin.ModelAdmin):
     list_display = ('date_time','user','details')
     search_fields= ['user']
 
+class ContactAdmin(admin.ModelAdmin):
+    list_display = ('name', 'email', 'phone_number', 'your_message', 'created_at')
+    search_fields = ['name', 'email', 'phone_number']
+
+class ReviewRatingAdmin(admin.ModelAdmin):
+    list_display = ('review_id', 'review_given_by', 'review_for', 'carpool','booking', 'rating')
+    search_fields = ['review_id', 'review_given_by', 'review_for']
+
 admin.site.register(User, UserAdmin)
 admin.site.register(CreateCarpool,CreateCarpoolAdmin)
 admin.site.register(Booking,BookingAdmin)
 admin.site.register(Activity,ActivityAdmin)
+admin.site.register(Contact,ContactAdmin)
+admin.site.register(ReviewRating,ReviewRatingAdmin)

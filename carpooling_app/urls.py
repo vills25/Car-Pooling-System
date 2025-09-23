@@ -46,5 +46,7 @@ urlpatterns = [
     path('booking/filter/', filter_bookings),
     path("driver/booking-requests/", driver_view_booking_requests),
     path("driver/booking-action/", driver_approve_reject_booking),
-    path('ride_reminder_notifications/',ride_reminder_notifications)
+    path('ride_reminder_notifications/',ride_reminder_notifications),
+    path('review/', give_review_rating),
+    path('driver-info/',view_driver_info),
 ]+ static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

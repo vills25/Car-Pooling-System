@@ -1,111 +1,21 @@
-from datetime import timedelta
+import re
+from venv import create
+from rest_framework.permissions import AllowAny
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
 from django.db import transaction
 from django.utils import timezone
 from .custom_jwt_auth import IsDriverOrPassengerCustom, IsDriverCustom
-from .models import CreateCarpool, Booking
-from .serializers import BookingDetailSerializer, BookingSerializer
+from .models import CreateCarpool, Booking, User, ReviewRating
+from .serializers import BookingDetailSerializer, BookingSerializer, ReviewRatingSerializer
 from .user_auth import activity
 from .utils import ride_status_function, send_booking_email
-from django.core.mail import send_mail
 from django.core.mail import EmailMultiAlternatives
 from django.utils.html import strip_tags
+from django.db.models import Avg
 
 # Book a seat in carpool (Only Logged-in(Registered) user can book only available upcomming carpools)
-# @api_view(['POST'])
-# @permission_classes([IsDriverOrPassengerCustom])
-# def book_carpool(request):
-#     user = request.user
-
-#     ## check if user already has an active or upcoming journey
-#     check_upcoming_journey = CreateCarpool.objects.filter(carpool_creator_driver=user, departure_time__gte=timezone.now()).exists()
-
-#     if check_upcoming_journey:
-#         return Response({"status": "fail", "message": "You already have an active or upcoming journey. Cannot book a seat."},status=status.HTTP_400_BAD_REQUEST)
-
-#     get_carpool_id = request.data.get("createcarpool_id")
-#     get_seats = request.data.get("seat_book", 1)
-#     get_pickup_location = request.data.get("pickup_location")
-#     get_drop_location = request.data.get("drop_location")
-#     get_contact_info = request.data.get("contact_info")
-#     get_distance_travelled=float(request.data.get("distance_travelled", 0))
-#     get_payment_mode=request.data.get("payment_mode", "cash")
-
-#     if not get_carpool_id:
-#         return Response({"status":"fail","message":"createcarpool_id is required"}, status=status.HTTP_400_BAD_REQUEST)
-
-#     seat_book = int(get_seats)
-#     if seat_book <= 0 or not int:
-#         return Response({"status":"fail","message":"seat_book must be positive or integer"}, status=status.HTTP_400_BAD_REQUEST)
-    
-#     try:
-#         with transaction.atomic():
-#             carpool = CreateCarpool.objects.get(pk=get_carpool_id)
-
-#             # Past ride check
-#             if carpool.departure_time < timezone.now():
-#                 return Response({"status":"fail", "message":"this ride has been expired"}, status=status.HTTP_400_BAD_REQUEST)
-
-#             # Seat availability check
-#             if carpool.available_seats < seat_book:
-#                 return Response({"status":"fail", "message":"this ride is full"}, status=status.HTTP_400_BAD_REQUEST)
-
-#             # Prevent double booking
-#             if Booking.objects.filter(carpool_driver_name=carpool, passenger_name=user, booking_status="confirmed").exists():
-#                 return Response({"status":"fail", "message":"you already booked this carpool"}, status=status.HTTP_400_BAD_REQUEST)
-
-#              # If no seats currently available -> create waitlisted booking
-#             if carpool.available_seats < seat_book:
-#                 booking = Booking.objects.create(
-#                     carpool_driver_name = carpool,
-#                     passenger_name = user,
-#                     seat_book = seat_book,
-#                     distance_travelled = get_distance_travelled,
-#                     payment_mode = get_payment_mode,
-#                     booked_by = user,
-#                     pickup_location = get_pickup_location,
-#                     drop_location = get_drop_location,
-#                     contact_info = get_contact_info,
-#                     booking_status = "waitlisted"
-#                 )
-#                 activity(user, f"{user.username} waitlisted booking {booking.booking_id} for carpool {carpool.createcarpool_id}")
-#                 send_booking_email(booking, "waitlisted")
-#                 serializer = BookingDetailSerializer(booking)
-#                 return Response({"status":"success","message":"Ride waitlisted","Booking Details":serializer.data}, status=status.HTTP_201_CREATED)
-
-#             booking = Booking.objects.create(
-#                 carpool_driver_name=carpool,
-#                 passenger_name=user,
-#                 seat_book=seat_book,
-#                 distance_travelled=get_distance_travelled,
-#                 payment_mode=get_payment_mode,
-#                 booked_by=user,
-#                 pickup_location=get_pickup_location,
-#                 drop_location=get_drop_location,
-#                 contact_info=get_contact_info,
-#                 booking_status="pending"
-#             )
-
-#             carpool.available_seats -= seat_book
-#             carpool.save()
-            
-#             user_role_change = user
-#             if user_role_change.role != "passenger":
-#                 user_role_change.role = "passenger"
-#                 user_role_change.save()
-
-#             activity(user, f"{user.username} requested booking {booking.booking_id} for carpool {carpool.createcarpool_id}")
-#             serializer = BookingDetailSerializer(booking)
-#             return Response({"status":"success","message":"Booking request sent to driver","data":{"Booking Details":serializer.data}}, status=status.HTTP_201_CREATED)
-
-#     except CreateCarpool.DoesNotExist:
-#         return Response({"status":"fail","message":"Carpool not found"}, status=status.HTTP_404_NOT_FOUND)
-
-#     except Exception as e:
-#         return Response({"status":"error","message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
 @api_view(['POST'])
 @permission_classes([IsDriverOrPassengerCustom])
 def book_carpool(request):
@@ -634,4 +544,134 @@ def ride_reminder_notifications(request):
     except Exception as e:
         return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+## give review
+@api_view(["POST"])
+@permission_classes([IsDriverOrPassengerCustom])
+def give_review_rating(request):
+    """
+    Add review for a driver (review_given_by = request.user)
+    Expect JSON or form-data:
+    {
+      "review_for_username": "Mahesh",
+      "carpool_id": 1,
+      "booking_id": 3,
+      "rating": 5,
+      "comment": "Nice ride!"
+    }
+    """
+    user = request.user
+    get_review_given_to_name = request.data.get("review_given_to_name")
+    get_carpool_id = request.data.get("carpool_id")
+    get_booking_id = request.data.get("booking_id")
+    get_rating = request.data.get("rating")
+    get_comment = request.data.get("comment")
 
+    # Required fields check
+    for key in ["review_for_username", "carpool_id", "booking_id", "rating"]:
+        if key not in request.data:
+            return Response({"status":"fail","message": f"'{key}' is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        review_for = User.objects.get(username = get_review_given_to_name)
+        carpool = CreateCarpool.objects.get(createcarpool_id = get_carpool_id)
+        booking = Booking.objects.get(booking_id = get_booking_id)
+
+        # reviewer must be passenger of the booking
+        if booking.passenger_name != user:
+            return Response({"status":"fail","message": "You can only review if you are the passenger for this booking"}, status=status.HTTP_403_FORBIDDEN)
+
+        # booking must belong to carpool
+        if booking.carpool_driver_name != carpool:
+            return Response({"status":"fail","message": "Booking does not belong to this carpool"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # carpool driver must match review_for
+        if carpool.carpool_creator_driver != review_for:
+            return Response({"status":"fail","message": "'review_for_username' is not the driver of this carpool"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Rating validation
+        try:
+            rating = int(get_rating)
+            if rating < 1 or rating > 5:
+                return Response({"status":"fail","message": "rating must be between 1 and 5"}, status=status.HTTP_400_BAD_REQUEST)
+        except ValueError:
+            return Response({"status":"fail","message": "rating must be an integer"}, status=status.HTTP_400_BAD_REQUEST)
+        # Create review
+        review = ReviewRating.objects.create(
+            review_given_by=user,
+            review_for=review_for,
+            carpool=carpool,
+            booking=booking,
+            rating=rating,
+            comment=get_comment
+        )
+
+        serializer = ReviewRatingSerializer(review)
+        return Response({"status":"success","message": "Review added successfully", "data": serializer.data}, status=status.HTTP_201_CREATED)
+    
+    except Booking.DoesNotExist:
+        return Response({"status":"fail","message": "booking not found"}, status=status.HTTP_400_BAD_REQUEST)
+
+    except CreateCarpool.DoesNotExist:
+        return Response({"status":"fail","message": "carpool not found"}, status=status.HTTP_400_BAD_REQUEST)
+
+    except User.DoesNotExist:
+        return Response({"status":"fail","message": "review_for user not found"}, status=status.HTTP_400_BAD_REQUEST)
+    
+    except Exception as e:
+        return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+## view driver info
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def view_driver_info(request):
+    """
+    Get driver info + stats + reviews
+    Response:
+    - driver_info: first_name, email, phone_number, address
+    - total_carpools
+    - total_reviews
+    - average_rating
+    """
+    get_driver_user_id = request.data.get("driver_user_id")
+    try:
+        get_driver = User.objects.get(user_id=get_driver_user_id)
+
+        driver_data = {
+            "first_name": get_driver.first_name,
+            "email": get_driver.email,
+            "phone_number": getattr(get_driver, "phone_number", None),
+            "address": getattr(get_driver, "address", None)
+        }
+
+        total_carpools = CreateCarpool.objects.filter(carpool_creator_driver=get_driver).count()
+
+        reviews_queryset = ReviewRating.objects.filter(review_for=get_driver).order_by("-created_at")
+        total_reviews = reviews_queryset.count()
+        avg_rating = reviews_queryset.aggregate(Avg("rating"))["rating__avg"] or 0
+        avg_rating = round(float(avg_rating), 2) if total_reviews else 0
+
+        reviews_data = []
+        for review in reviews_queryset[:5]:
+            reviews_data.append({
+                "review_id": review.review_id,
+                "reviewer_name": review.review_given_by.username,
+                "rating": review.rating,
+                "comment": review.comment,
+                "created_at": review.created_at
+            })
+
+        response_data = {
+            "driver_info": driver_data,
+            "total_carpools": total_carpools,
+            "total_reviews": total_reviews,
+            "average_rating": avg_rating,
+            "recent_reviews": reviews_data
+        }
+
+        return Response({"status":"success", "message": "Driver info fetched", "data": response_data}, status=status.HTTP_200_OK)
+
+    except User.DoesNotExist:
+        return Response({"status":"fail", "message": "driver not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    except Exception as e:
+        return Response({"status":"fail", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

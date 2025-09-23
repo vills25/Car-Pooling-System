@@ -86,3 +86,17 @@ class Activity(models.Model):
 
     def __str__(self):
         return f'{self.user}----{self.date_time}----{self.details}'
+
+## Review and Rating
+class ReviewRating(models.Model):
+    review_id = models.AutoField(primary_key=True)
+    review_given_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="given_reviews")  
+    review_for = models.ForeignKey(User, on_delete=models.CASCADE, related_name="received_reviews")  
+    carpool = models.ForeignKey(CreateCarpool, on_delete=models.CASCADE, related_name="reviews")
+    booking = models.ForeignKey(Booking, on_delete=models.CASCADE, related_name="reviews")
+    rating = models.PositiveIntegerField()
+    comment = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.review_given_by.username} → {self.review_for.username} ({self.rating})"
