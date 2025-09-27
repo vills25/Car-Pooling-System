@@ -30,6 +30,7 @@ urlpatterns = [
     path("carpool/detail/",carpool_detail), 
     path("carpool/search-carpools/",search_carpools),
     path("carpool/sort-carpools/",sort_carpools_by),
+    path("carpool/find-nearby-carpools/",find_nearby_carpools),
 
     #-------- CREATE CARPOOL --------#
     path('carpool/create/', create_carpool),

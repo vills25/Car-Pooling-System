@@ -10,7 +10,7 @@ class UserAdmin(admin.ModelAdmin):
     search_fields = ['username', 'email', 'first_name']
 
 class CreateCarpoolAdmin(admin.ModelAdmin):
-    list_display = ('createcarpool_id','carpool_creator_driver','start_location','end_location','departure_time','contribution_per_km','total_passenger_allowed')
+    list_display = ('createcarpool_id','carpool_creator_driver','start_location','end_location','departure_time','contribution_per_km','distance_km')
     search_fields = ['carpool_creator_driver','createcarpool_id']
 
 class BookingAdmin(admin.ModelAdmin):
@@ -26,7 +26,7 @@ class ContactAdmin(admin.ModelAdmin):
     search_fields = ['name', 'email', 'phone_number']
 
 class ReviewRatingAdmin(admin.ModelAdmin):
-    list_display = ('review_id', 'review_given_by', 'review_for', 'carpool','booking', 'rating')
+    list_display = ('review_id', 'review_given_by', 'review_for', 'carpool_driver','booking_person_name', 'rating')
     search_fields = ['review_id', 'review_given_by', 'review_for']
 
 admin.site.register(User, UserAdmin)
