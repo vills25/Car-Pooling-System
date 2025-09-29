@@ -1,0 +1,38 @@
+{
+  "status": "success",
+  "message": "Booking request sent to driver",
+  "data": {
+    "Booking Details": {
+      "booking_id": 38,
+      "passenger_name": "Vills",
+      "seat_book": 1,
+      "distance_travelled": "263.20",
+      "contribution_amount": null,
+      "payment_mode": "cash",
+      "booking_status": "pending",
+      "ride_status": "upcoming",
+      "booked_by": 7,
+      "booked_at": "29-09-2025 19:01:10",
+      "pickup_location": "Nasik Bus stop",
+      "drop_location": "K.A.Ichalkaranji Janata Co Op Bank",
+      "contact_info": "8965874589",
+      "carpool_detail": {
+        "createcarpool_id": 77,
+        "carpool_driver_name": "Pratham",
+        "start_location": "Nasik Bus stop",
+        "end_location": "K.A.Ichalkaranji Janata Co Op Bank",
+        "departure_time": "29-09-2025 20:30:00",
+        "arrival_time": "29-09-2025 21:00:00",
+        "available_seats": 3,
+        "total_passenger_allowed": 3,
+        "contribution_per_km": "5.00",
+        "distance_km": "270.22",
+        "add_note": "Be on time",
+        "contact_info": "8965985698",
+        "allow_luggage": true,
+        "car_model": "Hyundai Creta",
+        "car_number": "GJ05KL8956"
+      }
+    }
+  }
+}
