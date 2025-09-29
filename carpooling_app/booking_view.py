@@ -8,116 +8,12 @@ from .custom_jwt_auth import IsDriverOrPassengerCustom, IsDriverCustom
 from .models import CreateCarpool, Booking, User, ReviewRating
 from .serializers import BookingDetailSerializer, BookingSerializer, ReviewRatingSerializer
 from .user_auth import activity
-from .utils import auto_calculate_distance, km_inr_format, ride_status_function, send_booking_email
+from .utils import auto_calculate_distance, km_inr_format, ride_status_function, send_booking_email, get_road_distance_osrm, get_lat_lng_cached
 from django.core.mail import EmailMultiAlternatives
 from django.utils.html import strip_tags
 from django.db.models import Avg
 
 # Book a seat in carpool (Only Logged-in(Registered) user can book only available upcomming carpools)
-# @api_view(['POST'])
-# @permission_classes([IsDriverOrPassengerCustom])
-# def book_carpool(request):
-#     """
-#     Book a seat in carpool.
-    
-#     Parameters:
-#     createcarpool_id: int (required)
-#     seat_book: int (required, default=1)
-#     pickup_location: str (required)
-#     drop_location: str (required)
-#     contact_info: str (required)
-#     payment_mode: str (required, default="cash")
-#     """
-#     user = request.user
-
-#     get_carpool_id = request.data.get("createcarpool_id")
-#     if not get_carpool_id:
-#         return Response({"status":"fail","message":"createcarpool_id is required"}, status=status.HTTP_400_BAD_REQUEST)
-
-#     seat_book = request.data.get("seat_book", 1)
-#     try:
-#         seat_book = int(seat_book)
-#         if seat_book <= 0:
-#             raise ValueError
-#     except:
-#         return Response({"status":"fail","message":"seat_book must be a positive integer"}, status=status.HTTP_400_BAD_REQUEST)
-
-#     pickup_location = request.data.get("pickup_location")
-#     drop_location = request.data.get("drop_location")
-#     contact_info = request.data.get("contact_info")
-#     payment_mode = request.data.get("payment_mode", "cash")
-#     distance_travelled = float(request.data.get("distance_travelled", 0))
-
-#     if not distance_travelled or float(distance_travelled) == 0:
-#         try:
-#             carpool_obj = CreateCarpool.objects.get(pk=get_carpool_id)
-#             distance_travelled = auto_calculate_distance(
-#                 carpool_obj.start_location,
-#                 carpool_obj.end_location,
-#                 start_lat=carpool_obj.latitude_start,
-#                 start_lon=carpool_obj.longitude_start,
-#                 end_lat=carpool_obj.latitude_end,
-#                 end_lon=carpool_obj.longitude_end
-#             )
-#         except CreateCarpool.DoesNotExist:
-#             distance_travelled = 0
-#     else:
-#         distance_travelled = float(distance_travelled)
-
-#     check_upcoming_rides = CreateCarpool.objects.filter( carpool_creator_driver=user,departure_time__gte=timezone.now()).exists()
-#     if check_upcoming_rides:
-#         return Response({"status":"fail","message":"You already have an active or upcoming journey."}, status=status.HTTP_400_BAD_REQUEST)
-
-#     try:
-#         with transaction.atomic():
-#             carpool = CreateCarpool.objects.get(pk=get_carpool_id)
-
-#             if carpool.departure_time < timezone.now():
-#                 return Response({"status":"fail", "message":"This ride has already departed"}, status=status.HTTP_400_BAD_REQUEST)
-
-#             already_booked = Booking.objects.filter(carpool_driver_name=carpool, passenger_name=user, booking_status="confirmed").exists()
-#             if already_booked:
-#                 return Response({"status":"fail", "message":"You already booked this carpool"}, status=status.HTTP_400_BAD_REQUEST)
-
-#             if carpool.available_seats >= seat_book:
-#                 status_booking = "pending"
-#                 # carpool.available_seats -= seat_book
-#                 carpool.save()
-#                 message = "Booking request sent to driver"
-#             else:
-#                 status_booking = "waitlisted"
-#                 message = "Ride waitlisted due to insufficient seats"
-
-#             # Create booking
-#             booking = Booking.objects.create(
-#                 carpool_driver_name=carpool,
-#                 passenger_name=user,
-#                 seat_book=seat_book,
-#                 distance_travelled=distance_travelled,
-#                 payment_mode=payment_mode,
-#                 booked_by=user,
-#                 pickup_location=pickup_location,
-#                 drop_location=drop_location,
-#                 contact_info=contact_info,
-#                 booking_status=status_booking
-#             )
-
-#             if user.role != "passenger":
-#                 user.role = "passenger"
-#                 user.save()
-
-#             activity(user, f"{user.username} {status_booking} booking {booking.booking_id} for carpool {carpool.createcarpool_id}")
-#             send_booking_email(booking, status_booking)
-
-#             serializer = BookingDetailSerializer(booking)
-#             return Response({"status":"success","message":message,"data":{"Booking Details": serializer.data}}, status=status.HTTP_201_CREATED)
-
-#     except CreateCarpool.DoesNotExist:
-#         return Response({"status":"fail","message":"Carpool not found"}, status=status.HTTP_404_NOT_FOUND)
-
-#     except Exception as e:
-#         return Response({"status":"error","message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
 @api_view(['POST'])
 @permission_classes([IsDriverOrPassengerCustom])
 def book_carpool(request):
@@ -151,10 +47,10 @@ def book_carpool(request):
     contact_info = request.data.get("contact_info")
     payment_mode = request.data.get("payment_mode", "cash")
     # Accept optional precise coordinates if provided:
-    pickup_lat = request.data.get("pickup_latitude") or request.data.get("pickup_lat")
-    pickup_lon = request.data.get("pickup_longitude") or request.data.get("pickup_lon")
-    drop_lat = request.data.get("drop_latitude") or request.data.get("drop_lat")
-    drop_lon = request.data.get("drop_longitude") or request.data.get("drop_lon")
+    pickup_lat = request.data.get("pickup_latitude") 
+    pickup_lon = request.data.get("pickup_longitude") 
+    drop_lat = request.data.get("drop_latitude")
+    drop_lon = request.data.get("drop_longitude")
 
     distance_travelled = request.data.get("distance_travelled")
     try:
@@ -164,31 +60,47 @@ def book_carpool(request):
             # If precise coordinates for pickup/drop given, use them
             if pickup_lat and pickup_lon and drop_lat and drop_lon:
                 try:
-                    distance_travelled = auto_calculate_distance(
-                        pickup_location or "", drop_location or "",
-                        start_lat=float(pickup_lat), start_lon=float(pickup_lon),
-                        end_lat=float(drop_lat), end_lon=float(drop_lon)
+                    distance_travelled = get_road_distance_osrm(
+                        float(pickup_lat), float(pickup_lon),
+                        float(drop_lat), float(drop_lon)
                     )
+                    if distance_travelled is None:
+                        # fallback to old method if OSRM fails
+                        distance_travelled = auto_calculate_distance(
+                            pickup_location or "", drop_location or "",
+                            start_lat=float(pickup_lat), start_lon=float(pickup_lon),
+                            end_lat=float(drop_lat), end_lon=float(drop_lon)
+                        )
                 except Exception:
                     distance_travelled = 0.0
+
             # Else if pickup/drop text provided, estimate between those two points
             elif pickup_location and drop_location:
                 try:
-                    distance_travelled = auto_calculate_distance(pickup_location, drop_location)
+                    # Try OSRM using geocoded coordinates
+                    start_lat, start_lon = get_lat_lng_cached(pickup_location)
+                    end_lat, end_lon = get_lat_lng_cached(drop_location)
+                    distance_travelled = get_road_distance_osrm(start_lat, start_lon, end_lat, end_lon)
+                    if distance_travelled is None:
+                        distance_travelled = auto_calculate_distance(pickup_location, drop_location)
                 except Exception:
                     distance_travelled = 0.0
             else:
-                # Fallback: use entire carpool route distance
                 try:
                     carpool_obj = CreateCarpool.objects.get(pk=get_carpool_id)
-                    distance_travelled = auto_calculate_distance(
-                        carpool_obj.start_location,
-                        carpool_obj.end_location,
-                        start_lat=carpool_obj.latitude_start,
-                        start_lon=carpool_obj.longitude_start,
-                        end_lat=carpool_obj.latitude_end,
-                        end_lon=carpool_obj.longitude_end
+                    distance_travelled = get_road_distance_osrm(
+                        carpool_obj.latitude_start, carpool_obj.longitude_start,
+                        carpool_obj.latitude_end, carpool_obj.longitude_end
                     )
+                    if distance_travelled is None:
+                        distance_travelled = auto_calculate_distance(
+                            carpool_obj.start_location,
+                            carpool_obj.end_location,
+                            start_lat=carpool_obj.latitude_start,
+                            start_lon=carpool_obj.longitude_start,
+                            end_lat=carpool_obj.latitude_end,
+                            end_lon=carpool_obj.longitude_end
+                        )
                 except CreateCarpool.DoesNotExist:
                     distance_travelled = 0.0
                 except Exception:
@@ -308,9 +220,6 @@ def update_my_booking(request):
         with transaction.atomic():
             booking = Booking.objects.get(pk=booking_id, passenger_name=user)
 
-            # if booking.booking_status != "confirmed":
-            #     return Response({"status":"fail","message":"only confirmed bookings can be updated"}, status=status.HTTP_400_BAD_REQUEST)
-
             carpool = booking.carpool_driver_name
             if carpool.departure_time < timezone.now():
                 return Response({"status":"fail","message":"Cannot update booking of past ride"}, status=status.HTTP_400_BAD_REQUEST)
@@ -328,6 +237,7 @@ def update_my_booking(request):
 
                 booking.seat_book = new_seats
                 carpool.available_seats -= seat_diff
+                carpool.available_seats += abs(seat_diff)
                 carpool.save()
 
             # Other fields
@@ -364,7 +274,7 @@ def cancel_booking(request):
     user = request.user
     get_booking_id = request.data.get('booking_id')
     
-    if not request.user.is_superuser and request.user:
+    if not request.user.is_superuser and request.user != booking.passenger_name:
         return Response({"status":"fail", "message": "you can not delete others bookings"}, status=status.HTTP_403_FORBIDDEN)
 
     if not get_booking_id:
@@ -437,7 +347,7 @@ def filter_bookings(request):
         if sort_by == "latest_ride_date":
             bookings = bookings.order_by("carpool_driver_name__departure_time")
         elif sort_by == "earliest_ride_date":
-            bookings = bookings.order_by("-carpool_driver_name__departure_time")
+            bookings = bookings.order_by("carpool_driver_name__departure_time")
 
         serializer = BookingDetailSerializer(bookings, many=True)
         return Response({"status":"success","message":"Filtered and sorted bookings fetched","data":{"Bookings":serializer.data}}, status=status.HTTP_200_OK)

@@ -21,8 +21,6 @@ def admin_view_users(request):
     Only accessible to admin users.
     """
     try:
-        if not user_is_admin(request.user):
-            return Response({"status": "fail", "message": "Admin access required"}, status=status.HTTP_403_FORBIDDEN)
         users = User.objects.all().order_by("user_id")
         serializer = UserSerializer(users, many=True, context={'request': request})
         return Response({"status": "success", "Users": serializer.data}, status=status.HTTP_200_OK)
@@ -57,8 +55,6 @@ def admin_active_deactive_user(request):
     If the toggle is successful, it will return a 200 status code with a success message and the updated user data.
     If the toggle fails, it will return a 404 status code with an error message if the user is not found.
     """
-    if not user_is_admin(request.user):
-        return Response({"status": "fail", "message": "Admin access required"}, status=status.HTTP_403_FORBIDDEN)
     user_id = request.data.get("user_id")
     try:
         enter_user = User.objects.get(user_id=user_id)
@@ -81,8 +77,6 @@ def admin_view_carpools(request):
     If there are no carpools found, it will return a 404 status code with a message "No carpools found".
     """
     try:
-        if not user_is_admin(request.user):
-            return Response({"status": "fail", "message": "Admin access required"}, status=status.HTTP_403_FORBIDDEN)
         carpools = CreateCarpool.objects.all().order_by("-created_at")
         serializer = CreateCarpoolSerializer(carpools, many=True)
         return Response({"status": "success", "Carpools": serializer.data}, status=status.HTTP_200_OK)
@@ -99,8 +93,6 @@ def admin_view_bookings(request):
     Only accessible to admin users.
     """
     try:
-        if not user_is_admin(request.user):
-            return Response({"status": "fail", "message": "Admin access required"}, status=status.HTTP_403_FORBIDDEN)
         bookings = Booking.objects.all().order_by("-booked_at")
         serializer = BookingSerializer(bookings, many=True)
         return Response({"status": "success", "Bookings": serializer.data}, status=status.HTTP_200_OK)
@@ -121,14 +113,11 @@ def admin_full_report(request):
         Requires admin access.
         """ 
     try:
-        if not user_is_admin(request.user):
-            return Response({"status": "fail", "message": "Admin access required"},status=status.HTTP_403_FORBIDDEN)
-
         # Top drivers (totalrides count)
         top_drivers = User.objects.filter(role="driver").annotate(total_rides=Count("journeys")).order_by("-total_rides")[:5].values_list("username", "total_rides")
 
         # Busiest routes
-        busiest_routes = CreateCarpool.objects.values_list("start_location", "end_location").annotate(count=Count("createcarpool_id")).order_by("-count")[:5]
+        busiest_routes = CreateCarpool.objects.values("start_location", "end_location").annotate(count=Count("createcarpool_id")).order_by("-count")[:5]
 
         # Highest earner driver
         highest_earner = Booking.objects.filter(booking_status="confirmed").values("carpool_driver_name__carpool_creator_driver__username").annotate(total_earnings=Sum("contribution_amount")).order_by("-total_earnings").first()
@@ -139,19 +128,12 @@ def admin_full_report(request):
             highest_earner_data = {"username": None, "amount": 0}
 
         # Dashboard Stats
-        total_revenue = Booking.objects.filter(booking_status="confirmed").aggregate(total=Sum("contribution_amount")).get("total", 0)
+        total_revenue = Booking.objects.filter(booking_status="confirmed").aggregate(total=Sum("contribution_amount"))["total"] or 0
         active_drivers = User.objects.filter(role="driver", is_active=True).count()
         weekly_bookings = Booking.objects.filter(booked_at__gte=timezone.now() - timedelta(days=7)).count()
-        total_cancelled = Booking.objects.filter(booking_status="cancelled").count()
-
-        cancellation_rate = 0
         total_bookings = Booking.objects.count()
-        if total_bookings > 0:
-            c_ratio = total_cancelled / total_bookings  
-            rate = c_ratio * 100 
-            cancellation_rate = round(rate, 2) 
-        else:
-            cancellation_rate = 0
+        total_cancelled = Booking.objects.filter(booking_status="cancelled").count()
+        cancellation_rate = round(total_cancelled / total_bookings * 100, 2) if total_bookings else 0
 
         dashboard_stats = {
             "total_revenue": total_revenue,

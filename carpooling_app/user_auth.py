@@ -1,5 +1,3 @@
-import email
-from tkinter import PhotoImage
 from django.db.models import Q
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
@@ -9,8 +7,6 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.db import transaction
 from django.utils import timezone
-from django.db import transaction
-from django.contrib.auth.hashers import make_password
 from .models import *
 from .serializers import *
 from .custom_jwt_auth import IsAuthenticatedCustom
@@ -110,6 +106,9 @@ def login_user(request):
     try:
         user = User.objects.filter( Q(username=username) | Q(email=username) | Q(phone_number=username)).first()
 
+        if not user:
+            return Response({"status":"fail","message":"User not found"}, status=status.HTTP_404_NOT_FOUND)
+
         if not check_password(password, user.password):
             return Response({"status":"fail","message":"Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
         
@@ -166,7 +165,7 @@ def logout_user(request):
         try:
             token = RefreshToken(refresh_token)
             token.blacklist()
-            activity(user, f"{user.username} logged out)")
+            activity(user, f"{user.username} logged out")
 
         except Exception as e:
             return Response({"status": "success", "message": str(e)}, status=status.HTTP_200_OK)
@@ -393,7 +392,8 @@ def reset_password(request):
 
         if raw_password != confirm_password:
             return Response({"status":"fail","message":"Password and confirm password not matched"}, status=status.HTTP_400_BAD_REQUEST)
-        user.password = make_password(new_password)
+        new_password_hashed = make_password(raw_password)
+        user.password = new_password_hashed
         user.save()
         return Response({"status":"success","message":"Password reset successfully"}, status=status.HTTP_200_OK)
     

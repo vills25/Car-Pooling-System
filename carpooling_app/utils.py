@@ -2,6 +2,8 @@ from django.utils import timezone
 import random
 from django.core.mail import send_mail
 from django.conf import settings
+from requests import Response
+import requests
 from carpooling_app import models
 from carpooling_app.models import Activity, Booking, CreateCarpool
 from django.core.mail import EmailMultiAlternatives
@@ -11,6 +13,7 @@ from geopy.geocoders import Nominatim
 from math import atan2, radians, cos, sin, asin, sqrt
 from geopy.distance import geodesic
 from django.db.models import Q
+from rest_framework import status
 
 def user_is_admin(user):
     """
@@ -224,11 +227,12 @@ def send_contact_email(name, email, phone_number, your_message):
     to_email = settings.DEFAULT_FROM_EMAIL
     send_mail(subject, message, from_email, [to_email])
 
+OSRM_BASE_URL = "http://router.project-osrm.org"  # public demo server; for production consider self-hosting
 
 ## get location latitude and longitude from entered string
 def get_lat_lng(place_name):
     """
-    Returns lat/lng for place name, else (None, None)
+    Returns latitude/longitude cordinates for place name, else (None, None)
     param query: The address, query or a structured query
             you wish to geocode.
             For a structured query, provide a dictionary whose keys
@@ -240,8 +244,8 @@ def get_lat_lng(place_name):
         loc = geolocator.geocode(place_name)
         if loc:
             return loc.latitude, loc.longitude
-    except:
-        pass
+    except Exception as e:
+        return Response({"status":"error", "message": f"Geocoding failed for {place_name}: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     return None, None
 
 location_cache = {}
@@ -251,22 +255,58 @@ def get_lat_lng_cached(location_name):
     """
     if location_name in location_cache:
         return location_cache[location_name]
+
     lat, lon = get_lat_lng(location_name)
     location_cache[location_name] = (lat, lon)
     return lat, lon
 
+def get_road_distance_osrm(lat1, lon1, lat2, lon2, profile="driving"):
+    """
+    Use OSRM public API to fetch by-road distance (in KM).
+    Returns float km or None on failure.
+    """
+    try:
+        # OSRM order: longitude, latitude
+        coordinates = f"{lon1},{lat1};{lon2},{lat2}"
+        url = f"{OSRM_BASE_URL}/route/v1/{profile}/{coordinates}?overview=false&annotations=distance"
+        resp = requests.get(url, timeout=6)
+        if resp.status_code != 200:
+            print("OSRM request failed:", resp.status_code)
+            return None
+        data = resp.json()
+        # print("=========>>>>>>> OSRM response <<<<<<<=========:", data)
+
+        if "routes" in data and len(data["routes"]) > 0:
+            distance_m = data["routes"][0].get("distance")
+            if distance_m is None:
+                return None
+            return round(distance_m / 1000.0, 2)
+    except Exception as e:
+        return Response({"status":"error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    return None
+
+## Calculate realistic distance between two points in km.
 def calculate_realistic_distance(lat1, lon1, lat2, lon2):
-    # straight-line distance
+    """
+    This function uses the geodesic library to calculate the straight-line distance
+    between two points, and then applies a road factor of 1.3 to account for
+    the fact that roads are rarely straight lines.
+
+    Returns:
+    float: Realistic distance between the two points in km
+    """
     straight_distance = geodesic((lat1, lon1), (lat2, lon2)).km
-    # road factor ~1.5 (20% zyada)
+    # road factor ~1.3 (20% zyada)
     return round(straight_distance * 1.3, 2)
 
+## Calculate distance between two points, using geodesic library and haversine formula
 def calculate_distance(lat1, lon1, lat2, lon2):
     """ Uses geodesic to calculate distance in km."""
     if None in (lat1, lon1, lat2, lon2):
         return 0
     return round(geodesic((lat1, lon1), (lat2, lon2)).km, 2)
 
+# Haversine formula version 
 def calculate_distance_km(start_lat, start_lng, end_lat, end_lng):
     """ Haversine formula version"""
     R = 6371.0  # Earth radius in km
@@ -279,7 +319,7 @@ def calculate_distance_km(start_lat, start_lng, end_lat, end_lng):
     distance = R * c
     return round(distance, 2)
 
-
+# Auto calculate distance between two points using OSRM and geocoding if needed
 def auto_calculate_distance(start_loc, end_loc, start_lat=None, start_lon=None, end_lat=None, end_lon=None):
     """
     Calculate distance between start and end points.
@@ -287,54 +327,62 @@ def auto_calculate_distance(start_loc, end_loc, start_lat=None, start_lon=None, 
     - Fallback to geocoding if coordinates are missing
     - Returns distance in KM (float)
     """
-    # Use coordinates if all provided
-    if all([start_lat, start_lon, end_lat, end_lon]):
-        return calculate_realistic_distance(start_lat, start_lon, end_lat, end_lon)
-    
-    # If coordinates missing, fetch from geocoding
-    if start_lat is None or start_lon is None:
-        start_lat, start_lon = get_lat_lng_cached(start_loc)
-    if end_lat is None or end_lon is None:
-        end_lat, end_lon = get_lat_lng_cached(end_loc)
-    
-    # If still missing, return 0
-    if None in (start_lat, start_lon, end_lat, end_lon):
-        return 0
-    
-    # Calculate realistic road distance (approx straight * 1.2)
-    return calculate_realistic_distance(start_lat, start_lon, end_lat, end_lon)
+    # # Use coordinates if all provided
 
+    if start_lat is None or start_lon is None:
+        start_lat, start_lon = get_lat_lng_cached(start_loc) if start_loc else (None, None)
+    if end_lat is None or end_lon is None:
+        end_lat, end_lon = get_lat_lng_cached(end_loc) if end_loc else (None, None)
+
+    # If we have coordinates, prefer OSRM for real road distance
+    if None not in (start_lat, start_lon, end_lat, end_lon):
+        try:
+            road_km = get_road_distance_osrm(start_lat, start_lon, end_lat, end_lon)
+            if road_km is not None:
+                return road_km
+        except Exception:
+            # If OSRM fails, fallthrough to geodesic-based approximation
+            return Response({"status":"error", "message": "OSRM failed to calculate distance,  falling back to geodesic approximation method to calculate distance"},
+                              status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        # fallback realistic estimate from straight line
+        return calculate_realistic_distance(start_lat, start_lon, end_lat, end_lon)
+
+    # If coordinates still missing, attempt text-similarity fallback
+    if start_loc and end_loc:
+        return estimate_distance_by_text_similarity(start_loc, end_loc)
+
+    # Last resort
+    return 0.0
+
+# Estimate distance if geocoding fails using text similarity method 
 def estimate_distance_by_text_similarity(start, end):
     """
     Estimate distance if geocoding fails
     """
-    start_terms = set(start.lower().split())
-    end_terms = set(end.lower().split())
-    common_terms = start_terms.intersection(end_terms)
-    if common_terms and len(common_terms) >= 1:
-        return round(random.uniform(5, 25), 2)  # intra-city
-    return round(random.uniform(50, 300), 2)  # inter-city
+    try:
+        start_terms = set(start.lower().split())
+        end_terms = set(end.lower().split())
+        common_terms = start_terms.intersection(end_terms)
+        if common_terms and len(common_terms) >= 1:
+            return round(random.uniform(5, 25), 2)  # intra-city
+        return round(random.uniform(50, 300), 2)  # inter-city
+    except Exception:
+        return round(random.uniform(50, 300), 2)
 
+# Check if point is on route A→B
 def is_point_on_route(latA, lonA, latB, lonB, latP, lonP, threshold_km=25):
     """
     Checks if a point P lies roughly on the route A→B
     """
-    dist_AP = geodesic((latA, lonA), (latP, lonP)).km
-    dist_PB = geodesic((latP, lonP), (latB, lonB)).km
-    dist_AB = geodesic((latA, lonA), (latB, lonB)).km
-    return abs((dist_AP + dist_PB) - dist_AB) <= threshold_km
-
-def _safe_float(value, default=0.0):
-    
-    """
-    Safely convert a value to a float, returning the default value
-    if conversion fails.
-    """
     try:
-        return float(value)
-    except (ValueError, TypeError):
-        return default
+        dist_AP = geodesic((latA, lonA), (latP, lonP)).km
+        dist_PB = geodesic((latP, lonP), (latB, lonB)).km
+        dist_AB = geodesic((latA, lonA), (latB, lonB)).km
+        return abs((dist_AP + dist_PB) - dist_AB) <= threshold_km
+    except Exception as e:
+        return Response({"status":"error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+# Flexible location matching using multiple strategies 
 def matches_location(search_loc, carpool_loc, user_lat, user_lon, carpool_lat, carpool_lon):
     """
     Flexible location matching using multiple strategies
@@ -343,8 +391,11 @@ def matches_location(search_loc, carpool_loc, user_lat, user_lon, carpool_lat, c
         return True
     
     # Text-based matching (fuzzy)
-    if search_loc.lower() in carpool_loc.lower():
-        return True
+    try:
+        if search_loc.lower() in carpool_loc.lower():
+            return True
+    except Exception as e:
+        return  Response({"status":"error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     # Coordinate-based matching (20km radius)
     if user_lat and user_lon and carpool_lat and carpool_lon:
@@ -354,7 +405,7 @@ def matches_location(search_loc, carpool_loc, user_lat, user_lon, carpool_lat, c
 
     # Token-based matching (check if search terms appear in carpool location)
     search_terms = search_loc.lower().split()
-    carpool_text = carpool_loc.lower()
+    carpool_text = carpool_loc.lower() if carpool_loc else ""
     
     # If any search term matches significantly
     for term in search_terms:
@@ -363,6 +414,7 @@ def matches_location(search_loc, carpool_loc, user_lat, user_lon, carpool_lat, c
     
     return False
 
+# Advanced route matching without static data 
 def matches_route(search_end, carpool, user_end_lat, user_end_lon):
     """
     Advanced route matching without static data
@@ -388,6 +440,7 @@ def matches_route(search_end, carpool, user_end_lat, user_end_lon):
     # Text-based intermediate matching
     return is_text_based_intermediate(search_end, carpool)
 
+# Dynamic route matching using geometric calculations only 
 def is_point_on_route_dynamic(latA, lonA, latB, lonB, latP, lonP, max_deviation_ratio=0.3):
     """
     Dynamic route matching using geometric calculations only
@@ -402,39 +455,47 @@ def is_point_on_route_dynamic(latA, lonA, latB, lonB, latP, lonP, max_deviation_
         # Allow some deviation based on route length
         max_deviation = dist_AB * max_deviation_ratio
         
+        # Check if point is on route within deviatio
         return abs((dist_AP + dist_PB) - dist_AB) <= max_deviation
 
-    except:
-        return False
+    except Exception as e:
+        return Response({"status":"error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+# Text-based intermediate matching using static data only
 def is_text_based_intermediate(search_city, carpool):
     """
-    Text-based intermediate city detection using NLP-like techniques
+    Text-based intermediate matching using static data only (less accurate), but faster to compute than dynamic route matching (geometric), and less resource-intensive than dynamic
     """
-    # Get all unique locations from database to understand context
-    all_locations = set()
+    try:
+
+        # Add locations from current carpool route context
+        route_locations = CreateCarpool.objects.filter(
+            Q(start_location__icontains=carpool.start_location) | Q(end_location__icontains=carpool.end_location)
+            ).values_list('start_location', 'end_location')
     
-    # Add locations from current carpool route context
-    route_locations = CreateCarpool.objects.filter(
-        Q(start_location__icontains=carpool.start_location) | Q(end_location__icontains=carpool.end_location)
-        ).values_list('start_location', 'end_location')
+        for start, end in route_locations:
+            if search_city.lower() in start.lower():
+                return True
+            if search_city.lower() in end.lower():
+                return True
+            pass
     
-    for start, end in route_locations:
-        all_locations.update([start.lower(), end.lower()])
-    
-    # Check if search city appears in similar routes
-    similar_routes = CreateCarpool.objects.filter(
-        Q(start_location__icontains=carpool.start_location) |
-        Q(end_location__icontains=carpool.end_location) |
-        Q(start_location__icontains=search_city) |
-        Q(end_location__icontains=search_city)
-    )
-    
-    for route in similar_routes:
-        route_locations = [route.start_location.lower(), route.end_location.lower()]
-        if (search_city.lower() in route_locations and 
-            (carpool.start_location.lower() in route_locations or 
-             carpool.end_location.lower() in route_locations)):
-            return True
-    
+        # Check if search city appears in similar routes
+        similar_routes = CreateCarpool.objects.filter(
+            Q(start_location__icontains=carpool.start_location) |
+            Q(end_location__icontains=carpool.end_location) |
+            Q(start_location__icontains=search_city) |
+            Q(end_location__icontains=search_city)
+        )
+
+        for route in similar_routes:
+            route_locations = [route.start_location.lower(), route.end_location.lower()]
+            if (search_city.lower() in route_locations and (carpool.start_location.lower() in route_locations or carpool.end_location.lower() in route_locations)):
+                return True
+
+    except CreateCarpool.DoesNotExist:
+        return Response({"status":"error", "message": "Carpool does not exist"}, status=status.HTTP_404_NOT_FOUND)
+
+    except Exception as e:
+        return Response({"status":"error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     return False

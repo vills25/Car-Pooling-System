@@ -17,7 +17,7 @@ class User(models.Model):
 
     def __str__(self):
         return f"{self.user_id} ({self.username})"
-
+    
 ## Carpool Model
 class CreateCarpool(models.Model):
     createcarpool_id = models.AutoField(primary_key=True)
@@ -39,7 +39,7 @@ class CreateCarpool(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
     updated_by = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name="updated_carpool")
-    ## MySQL latitude & longitude fields
+    ## optional latitude & longitude fields
     latitude_start = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     longitude_start = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     latitude_end = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
@@ -54,7 +54,6 @@ class Booking(models.Model):
     carpool_driver_name = models.ForeignKey(CreateCarpool, on_delete=models.CASCADE, related_name="bookings")
     passenger_name = models.ForeignKey(User, on_delete=models.CASCADE, related_name="passenger_bookings")
     seat_book = models.PositiveIntegerField(default=1)
-    # distance_travelled = models.PositiveIntegerField(null=True, blank=True, help_text="Distance passenger will travel (in km)")
     distance_travelled = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     contribution_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     payment_mode = models.CharField(max_length=10, choices=[("cash", "Cash"), ("upi", "UPI")], default="cash")

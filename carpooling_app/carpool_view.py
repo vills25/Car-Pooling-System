@@ -11,6 +11,7 @@ from django.db import transaction
 from django.utils import timezone
 from django.db.models import Sum
 from rest_framework.permissions import AllowAny
+from rest_framework.pagination import PageNumberPagination
 
 #-------- PUBLIC (Anyone can see this details) --------#
 
@@ -53,54 +54,63 @@ def carpool_detail(request):
 @permission_classes([AllowAny])
 def search_carpools(request):
     """
-    Smart search without static data - pure algorithmic approach
+    Smart search with location name + coordinates support.
     """
     start = request.data.get("start_location", "").strip()
     end = request.data.get("end_location", "").strip()
     date = request.data.get("date")
+    start_latitude = request.data.get("start_latitude")
+    start_longitude = request.data.get("start_longitude")
+    end_latitude = request.data.get("end_latitude")
+    end_longitude = request.data.get("end_longitude")
 
     try:
-        # Base query
+        # Base query: upcoming rides with available seats
         qs = CreateCarpool.objects.filter(available_seats__gt=0, departure_time__gte=timezone.now())
-        
-        # Apply  date filters if provided in request data and append to base query
+
+        # Date filter (optional)
         if date:
             qs = qs.filter(departure_time__icontains=date)
 
         final_results = []
-        
-        # Get user start/end location's geo coordinates using get_lat_lng function if available else set None
-        user_start_lat, user_start_lon = get_lat_lng(start) if start else (None, None)
-        user_end_lat, user_end_lon = get_lat_lng(end) if end else (None, None)
-        print('---------- 11111 ----------')
+
+        # Get user's start/end coordinates either from request OR geocoding
+        if start_latitude and start_longitude:
+            user_start_lat, user_start_lon = float(start_latitude), float(start_longitude)
+        else:
+            user_start_lat, user_start_lon = get_lat_lng_cached(start) if start else (None, None)
+
+        if end_latitude and end_longitude:
+            user_end_lat, user_end_lon = float(end_latitude), float(end_longitude)
+        else:
+            user_end_lat, user_end_lon = get_lat_lng_cached(end) if end else (None, None)
+
         print(">>>> User start coordinates:", user_start_lat, user_start_lon)
         print(">>>> User end coordinates:", user_end_lat, user_end_lon)
 
         # Iterate over base query
         for carpool in qs:
-            # Ensure distance is calculated
+            # Calculate distance if not set
             if not carpool.distance_km or float(carpool.distance_km) == 0:
                 carpool.distance_km = auto_calculate_distance(
-                    carpool.start_location, 
+                    carpool.start_location,
                     carpool.end_location,
-                    start_lat = carpool.latitude_start,
-                    start_lon = carpool.longitude_start,
-                    end_lat = carpool.latitude_end,
-                    end_lon = carpool.longitude_end
+                    start_lat=carpool.latitude_start,
+                    start_lon=carpool.longitude_start,
+                    end_lat=carpool.latitude_end,
+                    end_lon=carpool.longitude_end
                 )
-                carpool.save(update_fields=['distance_km']) ## save only distance, not all fields, to avoid circular dependency issue with auto_calculate_distance function
-            
-            print('---------- 22222 ----------')
+                carpool.save(update_fields=['distance_km'])
+
             print(">>>> Carpool start coordinates:", carpool.latitude_start, carpool.longitude_start)
             print(">>>> Carpool end coordinates:", carpool.latitude_end, carpool.longitude_end)
 
-            # Start location matching
-            start_match = matches_location(start, carpool.start_location, user_start_lat, user_start_lon, carpool.latitude_start, carpool.longitude_start)
-            
-            # End location matching with route logic
-            end_match = matches_route(end, carpool, user_end_lat, user_end_lon)
-            
-            print('---------- 33333 ----------')
+            # Start location match (name OR coordinate)
+            start_match = matches_location(start,carpool.start_location,user_start_lat,user_start_lon,carpool.latitude_start,carpool.longitude_start)
+
+            # End location match (name OR coordinate)
+            end_match = matches_route( end,carpool,user_end_lat,user_end_lon)
+
             print(">>>> Start match:", start_match)
             print(">>>> End match:", end_match)
 
@@ -111,12 +121,12 @@ def search_carpools(request):
             return Response({"status": "fail", "message": "No carpools found"}, status=status.HTTP_404_NOT_FOUND)
 
         serializer = CreateCarpoolSerializer(final_results, many=True)
-        return Response({ "status": "success", "message": "Carpools fetched", "data": {"Carpools": km_inr_format(serializer.data)}}, status=status.HTTP_200_OK)
+        return Response({"status": "success","message": "Carpools fetched","data": {"Carpools": km_inr_format(serializer.data)}}, status=status.HTTP_200_OK)
 
     except Exception as e:
         return Response({"status": "error", "message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-## sort carpools by date, location, available seats, departure time, arrivval time, seats.
+## sort carpools by date, location, available seats, departure time, arrivval time, luggage.
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def sort_carpools_by(request):
@@ -168,7 +178,6 @@ def sort_carpools_by(request):
             try:
                 seats = int(available_seats)
                 queryset = queryset.filter(available_seats__gte=seats) # equal or greter then entered seats
-
             except:
                 return Response({"status": "fail", "message": "available_seats must be an integer"}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -188,59 +197,71 @@ def sort_carpools_by(request):
 @permission_classes([AllowAny])
 def find_nearby_carpools(request):
     """
-    Find nearby carpools within 20 KM radius.
-    
-    Parameters:
-    - location: str (required)
-    
-    Response:
-    - List of carpools with distance (sorted nearest first)
+    Find nearby carpools within a 20 KM radius.
+    Input:
+        - location (string) OR latitude & longitude
+    Output:
+        - List of nearby carpools sorted by distance (only upcoming & with available seats)
     """
     location_name = request.data.get("location")
-    if not location_name:
-        return Response({"status": "fail", "message": "Location is required"}, status=status.HTTP_400_BAD_REQUEST)
-    
-    # Get latitude & longitude of user's entered location
-    user_lat, user_lon = get_lat_lng_cached(location_name)
-    if not user_lat or not user_lon:
-        return Response({"status": "fail", "message": "Could not find coordinates for this location"}, status=status.HTTP_400_BAD_REQUEST)
-    
+    location_latitude = request.data.get("location_latitude")
+    location_longitude = request.data.get("location_longitude")
+
+    if not location_name and (location_latitude is None or location_longitude is None):
+        return Response({"status": "fail","message": "Location name OR latitude & longitude required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    if location_latitude is not None and location_longitude is not None:
+        try:
+            user_lat, user_lon = float(location_latitude), float(location_longitude)
+        except ValueError:
+            return Response({"status": "fail","message": "Invalid latitude/longitude format" }, status=status.HTTP_400_BAD_REQUEST)
+    else:
+        user_lat, user_lon = get_lat_lng_cached(location_name)
+        if user_lat is None or user_lon is None:
+            return Response({"status": "fail", "message": "Invalid location or coordinates not found"}, status=status.HTTP_400_BAD_REQUEST)
+
     try:
-        # Filter upcoming carpools with available seats
-        carpools = CreateCarpool.objects.filter(departure_time__gte=timezone.now(),available_seats__gt=0)
-        
-        nearby_results = []
+        upcoming_carpools = CreateCarpool.objects.filter( departure_time__gte=timezone.now(), available_seats__gt=0 )
 
-        # Calculate distance between entered location and each carpool start location
-        for carpool in carpools:
-            if carpool.latitude_start and carpool.longitude_start:
-                carpool_coords = (carpool.latitude_start, carpool.longitude_start)
-            else:
-                # use geocode if lat/lon missing
-                carpool_lat, carpool_lon = get_lat_lng_cached(carpool.start_location)
-                carpool_coords = (carpool_lat, carpool_lon)
+        nearby_carpools = []
 
-            if None in carpool_coords:
+        for carpool in upcoming_carpools:
+            # Use DB coordinates if available, else geocode
+            start_lat = carpool.latitude_start
+            start_lon = carpool.longitude_start
+
+            if start_lat is None or start_lon is None:
+                start_lat, start_lon = get_lat_lng_cached(carpool.start_location)
+            
+            # Skip if coordinates are missing
+            if start_lat is None or start_lon is None:
                 continue
 
-            distance = geodesic((user_lat, user_lon), carpool_coords).km
+            distance_km = geodesic((user_lat, user_lon), (start_lat, start_lon)).km
 
-            # Keep only those within 20 KM
-            if distance <= 20:
-                serialized = CreateCarpoolSerializer(carpool).data
-                serialized["distance_from_you"] = f"{round(distance, 2)} KM"
-                nearby_results.append(serialized)
+            # Filter within 20 KM radius
+            if distance_km <= 20:
+                carpool_data = CreateCarpoolSerializer(carpool).data
+                carpool_data["distance_from_you"] = f"{distance_km:.2f} KM"
+                carpool_data["distance_value"] = distance_km
+                nearby_carpools.append(carpool_data)
 
-        # Sort by nearest first
-        nearby_results = sorted(nearby_results, key=lambda x: float(x["distance_from_you"].split()[0]))
+        # Sort by distance
+        for i in range(len(nearby_carpools)):
+            for j in range(i + 1, len(nearby_carpools)):
+                if nearby_carpools[i]["distance_value"] > nearby_carpools[j]["distance_value"]:
+                    temp = nearby_carpools[i]
+                    nearby_carpools[i] = nearby_carpools[j]
+                    nearby_carpools[j] = temp
 
-        return Response({"status": "success","total_results": len(nearby_results), "data": nearby_results}, status=status.HTTP_200_OK)
-    
-    except CreateCarpool.DoesNotExist:
-        return Response({"status": "fail", "message": "No carpools found"}, status=status.HTTP_404_NOT_FOUND)
+        for carpool in nearby_carpools:
+            del carpool["distance_value"]
+
+        return Response({"status": "success","total_results": len(nearby_carpools), "data": nearby_carpools}, status=status.HTTP_200_OK)
 
     except Exception as e:
-        return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({ "status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 #-------- CARPOOL CRUD --------#
 
@@ -252,35 +273,24 @@ def create_carpool(request):
     Create a new carpool by driver.
 
     Parameters:
-    start_location (str): required, starting location of the carpool
-    end_location (str): required, ending location of the carpool
-    departure_time (datetime): required, departure time of the carpool
-    arrival_time (datetime): required, arrival time of the carpool
-    available_seats (int): required, number of available seats in the carpool
-    total_passenger_allowed (int): required, total number of passengers allowed in the carpool
-    contribution_per_km (float): required, contribution per km in the carpool
-    distance_km (float): required, distance of the carpool in km
-    add_note (str): optional, additional information about the carpool
-    allow_luggage (bool): optional, whether the carpool allows luggage
-    gender_preference (str): optional, gender preference of the carpool
-    contact_info (str): optional, contact information of the carpool
-    car_model (str): optional, car model of the carpool
-    car_number (str): optional, car number of the carpool
-
-    Returns:
-    Response: a json response with the status, message and the carpool data
+    start_location (str): required
+    end_location (str): required
+    departure_time (datetime): required
+    arrival_time (datetime): required
+    available_seats (int): required
+    total_passenger_allowed (int): required
+    contribution_per_km (float): required
+    distance_km (float): optional (auto-calculated if not provided)
+    latitude_start, longitude_start, latitude_end, longitude_end: optional (for precise calculation)
     """
+
     user = request.user
-    
     current_time = timezone.now()
     two_hours_ahead = current_time + timedelta(hours=1)
 
-    ## check if user already has an active or upcoming journey
-    check_upcoming_journey = CreateCarpool.objects.filter(carpool_creator_driver=user, departure_time__lte=two_hours_ahead, arrival_time__gte=current_time).exists()
-
-    if check_upcoming_journey:
-        return Response(
-            {"status": "fail", "message": "You already have an active or upcoming journey within 1 hour. Cannot create new journey."},status=status.HTTP_400_BAD_REQUEST)
+    # check if user already has an active or upcoming journey
+    if CreateCarpool.objects.filter(carpool_creator_driver=user,departure_time__lte=two_hours_ahead,arrival_time__gte=current_time).exists():
+        return Response({"status": "fail", "message": "You already have an active or upcoming journey within 1 hour."},status=status.HTTP_400_BAD_REQUEST)
 
     # input fields
     get_start_location = request.data.get('start_location')
@@ -297,80 +307,109 @@ def create_carpool(request):
     get_gender_preference = request.data.get('gender_preference')
     get_car_model = request.data.get('car_model')
     get_car_number = request.data.get('car_number')
+    # Optional cordinates fields
+    get_latitude_start = request.data.get("latitude_start")
+    get_longitude_start = request.data.get("longitude_start")
+    get_latitude_end = request.data.get("latitude_end")
+    get_longitude_end = request.data.get("longitude_end")
 
-    # required fields
-    required = ["start_location", "end_location", "departure_time", "available_seats", "total_passenger_allowed"]
-    for fields in required:
-        if not request.data.get(fields):
-            return Response({"status":"fail","message": f"{fields} is required"}, status=status.HTTP_400_BAD_REQUEST)
+    # Required fields validation
+    for field in ["start_location", "end_location", "departure_time", "available_seats", "total_passenger_allowed"]:
+        if not request.data.get(field):
+            return Response({"status": "fail", "message": f"{field} is required"}, status=status.HTTP_400_BAD_REQUEST)
 
-    # Geocode locations
-    get_latitude_start, get_longitude_start = get_lat_lng(get_start_location)
-    get_latitude_end, get_longitude_end = get_lat_lng(get_end_location)
-
-    # check seats & pasanger 
     try:
         available_seats = int(get_available_seats)
         total_allowed = int(get_total_passenger_allowed)
-        
+
         if available_seats < 0 or total_allowed <= 0:
-            return Response({"status":"fail", "message":"available_seats must be >=0 and total_passenger_allowed must be >0"}, 
-                            status=status.HTTP_400_BAD_REQUEST)
+            return Response({"status": "fail", "message": "available_seats must be >=0 and total_passenger_allowed >0"}, status=status.HTTP_400_BAD_REQUEST)
         
         if available_seats > total_allowed:
-            return Response({"status":"fail", "message":"available_seats cannot be greater than total_passenger_allowed"}, 
-                              status=status.HTTP_400_BAD_REQUEST)
+            return Response({"status": "fail", "message": "available_seats cannot be greater than total_passenger_allowed"}, status=status.HTTP_400_BAD_REQUEST)
+        
+    except ValueError:
+        return Response({"status": "fail", "message": "available_seats and total_passenger_allowed must be integers"}, status=status.HTTP_400_BAD_REQUEST)
 
-        try:
-            distance_val = float(get_distance_km) if get_distance_km else 0
-        except:
-            distance_val = 0
+    try:
+        distance_val = float(get_distance_km) if get_distance_km else 0.0
+    except:
+        distance_val = 0.0
 
+    try:
         if distance_val <= 0:
-            distance_val = auto_calculate_distance(
-                get_start_location,
-                get_end_location,
-                start_lat=get_latitude_start,
-                start_lon=get_longitude_start,
-                end_lat=get_latitude_end,
-                end_lon=get_longitude_end
-            )
+            # Use given coordinates if available
+            if get_latitude_start and get_longitude_start and get_latitude_end and get_longitude_end:
+                try:
+                    distance_val = get_road_distance_osrm(
+                        float(get_latitude_start), float(get_longitude_start),
+                        float(get_latitude_end), float(get_longitude_end)
+                    )
+                    if distance_val is None:
+                        distance_val = auto_calculate_distance(
+                            get_start_location, get_end_location,
+                            start_lat=float(get_latitude_start), start_lon=float(get_longitude_start),
+                            end_lat=float(get_latitude_end), end_lon=float(get_longitude_end)
+                        )
+                except Exception:
+                    distance_val = 0.0
 
+            #If no coordinates, use geocoding
+            else:
+                start_lat, start_lon = get_lat_lng_cached(get_start_location)
+                end_lat, end_lon = get_lat_lng_cached(get_end_location)
+                distance_val = get_road_distance_osrm(start_lat, start_lon, end_lat, end_lon)
+
+                if distance_val is None:
+                    distance_val = auto_calculate_distance(
+                        get_start_location, get_end_location,
+                        start_lat=start_lat, start_lon=start_lon,
+                        end_lat=end_lat, end_lon=end_lon
+                    )
+
+    except Exception:
+        distance_val = 0.0
+
+    # If still no distance found
+    if distance_val <= 0:
+        distance_val = 0.0
+
+    try:
         with transaction.atomic():
             carpool = CreateCarpool.objects.create(
-                carpool_creator_driver = user,
-                start_location = get_start_location,
-                end_location = get_end_location,
-                latitude_start = get_latitude_start,   
-                longitude_start = get_longitude_start,
-                latitude_end = get_latitude_end,
-                longitude_end = get_longitude_end,
-                departure_time = get_departure_time,
-                arrival_time = get_arrival_time,
-                available_seats = available_seats,
-                total_passenger_allowed = total_allowed,
-                contribution_per_km = get_contribution_per_km,
-                distance_km = distance_val,
-                add_note = get_add_note,
-                allow_luggage = get_allow_luggage,
-                gender_preference = get_gender_preference,
-                contact_info = get_contact_info,
-                car_model = get_car_model,
-                car_number = get_car_number,
+                carpool_creator_driver=user,
+                start_location=get_start_location,
+                end_location=get_end_location,
+                latitude_start=float(get_latitude_start) if get_latitude_start else start_lat,
+                longitude_start=float(get_longitude_start) if get_longitude_start else start_lon,
+                latitude_end=float(get_latitude_end) if get_latitude_end else end_lat,
+                longitude_end=float(get_longitude_end) if get_longitude_end else end_lon,
+                departure_time=get_departure_time,
+                arrival_time=get_arrival_time,
+                available_seats=available_seats,
+                total_passenger_allowed=total_allowed,
+                contribution_per_km=get_contribution_per_km,
+                distance_km=distance_val,
+                add_note=get_add_note,
+                allow_luggage=get_allow_luggage,
+                gender_preference=get_gender_preference,
+                contact_info=get_contact_info,
+                car_model=get_car_model,
+                car_number=get_car_number,
             )
-            user_role_change = user
-            if user_role_change.role != "driver":
-                user_role_change.role = "driver"
-                user_role_change.save()
-            activity(user, f"{user.username} created a new carpool {carpool.createcarpool_id} and assigned driver role")
-            serializer = CreateCarpoolSerializer(carpool)
-            return Response({"status":"success", "message":"Carpool added", "data":{"Carpool data": km_inr_format(serializer.data)}}, status=status.HTTP_201_CREATED)
 
-    except ValueError:
-        return Response({"status":"fail", "message":"available_seats and total_passenger_allowed must be integers"}, status=status.HTTP_400_BAD_REQUEST)
+            # Auto-assign driver role if not already
+            if user.role != "driver":
+                user.role = "driver"
+                user.save()
+
+            activity(user, f"{user.username} created a new carpool {carpool.createcarpool_id} and became driver")
+
+            serializer = CreateCarpoolSerializer(carpool)
+            return Response({"status": "success", "message": "Carpool created successfully", "data": {"Carpool data": km_inr_format(serializer.data)}},status=status.HTTP_201_CREATED)
 
     except Exception as e:
-        return Response({"status":"error","message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"status": "error", "message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 ## user who created carpool will assigned driver role and only he can with driver role UPDATE/DELETE/VIEW his carpool details.
 ## Edit Carpool details 
@@ -378,33 +417,14 @@ def create_carpool(request):
 @permission_classes([IsDriverCustom])
 def update_carpool(request):
     """
-    Update the details of a carpool created by the user.
-
     This API will update the details of a carpool created by the user.
     It will only update the details of the carpool if the user is the creator of the carpool.
-    It will also validate the input fields and return an error if any of the fields are invalid.
 
     Parameters:
     createcarpool_id: int (required)
-    available_seats: int (optional)
-    start_location: str (optional)
-    end_location: str (optional)
-    departure_time: datetime (optional)
-    arrival_time: datetime (optional)
-    contribution_per_km: float (optional)
-    distance_km: float (optional)
-    add_note: str (optional)
-    allow_luggage: bool (optional)
-    gender_preference: str (optional)
-    contact_info: str (optional)
-    car_model: str (optional)
-    car_number: str (optional)
-    total_passenger_allowed: int (optional)
 
     Returns:
     A JSON response with the status, message and data of the updated carpool.
-    If the update is successful, it will return a 200 status code with a success message and the updated carpool details.
-    If the update fails, it will return a 400 status code with an error message and the error details.
     """
     user = request.user
     
@@ -503,18 +523,13 @@ def update_carpool(request):
 def delete_carpool(request):
     """
     Delete a carpool created by the user.
-
-    This API will delete a carpool created by the user.
     It will only delete the carpool if the user is the creator of the carpool or an admin.
-    It will also validate the input fields and return an error if any of the fields are invalid.
 
     Parameters:
     carpool_id: int (required)
 
     Returns:
     A JSON response with the status, message and data of the deleted carpool.
-    If the delete is successful, it will return a 200 status code with a success message and the deleted carpool details.
-    If the delete fails, it will return a 400 status code with an error message and the error details.
     """
     user = request.user
     get_carpool_id = request.data.get("carpool_id")
@@ -545,7 +560,6 @@ def view_my_carpools(request):
     It will return two lists of carpools: one for upcoming carpools and one for past carpools.
     The carpools will be sorted in ascending order of departure time for upcoming carpools and in descending order of departure time for past carpools.
     - Returns a JSON response with the status, message and data of the carpools.
-    - If there are no carpools found, it will return a 404 status code with a message "No carpools found".
     """
     user = request.user
 
