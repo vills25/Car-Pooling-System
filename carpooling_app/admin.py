@@ -14,7 +14,7 @@ class CreateCarpoolAdmin(admin.ModelAdmin):
     search_fields = ['carpool_creator_driver','createcarpool_id']
 
 class BookingAdmin(admin.ModelAdmin):
-    list_display = ('carpool_driver_name','booking_id','passenger_name','booking_status', 'distance_travelled')
+    list_display = ('carpool_driver_name','booking_id','pickup_location','drop_location','passenger_name','booking_status', 'distance_travelled','booked_at','booked_by')
     search_fields = ['carpool_driver_name','passenger_name']
 
 class ActivityAdmin(admin.ModelAdmin):

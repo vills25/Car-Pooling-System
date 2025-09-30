@@ -2,15 +2,14 @@ from django.utils import timezone
 import random
 from django.core.mail import send_mail
 from django.conf import settings
-from requests import Response
+from rest_framework.response import Response
 import requests
-from carpooling_app import models
-from carpooling_app.models import Activity, Booking, CreateCarpool
+from .models import Activity, Booking, CreateCarpool
 from django.core.mail import EmailMultiAlternatives
 from django.utils.html import strip_tags
 from django.conf import settings
 from geopy.geocoders import Nominatim
-from math import atan2, radians, cos, sin, asin, sqrt
+from math import atan2, radians, cos, sin, sqrt
 from geopy.distance import geodesic
 from django.db.models import Q
 from rest_framework import status
@@ -69,12 +68,30 @@ def km_inr_format(data):
     Returns:
     list or dict: The formatted data.
     """
-    if isinstance(data, list):
-        for km_inr in data:
-            if km_inr.get("contribution_per_km"):
-                km_inr["contribution_per_km"] = f"{km_inr['contribution_per_km']} INR"
-            if km_inr.get("distance_km"):
-                km_inr["distance_km"] = f"{km_inr['distance_km']} KM"
+    # if isinstance(data, list):
+    #     for km_inr in data:
+    #         if km_inr.get("contribution_per_km"):
+    #             km_inr["contribution_per_km"] = f"{km_inr['contribution_per_km']} INR"
+    #         if km_inr.get("distance_km"):
+    #             km_inr["distance_km"] = f"{km_inr['distance_km']} KM"
+    #     return data
+    # return data
+
+    if isinstance(data, dict):
+        for key, value in data.items():
+            if isinstance(value, list):
+                for item in value:
+                    if item.get("contribution_per_km") is not None:
+                        item["contribution_per_km"] = f"{item['contribution_per_km']} INR"
+                    if item.get("distance_km") is not None:
+                        item["distance_km"] = f"{item['distance_km']} KM"
+            elif isinstance(value, dict):
+                data[key] = km_inr_format(value)
+        return data
+    elif isinstance(data, list):
+        for item in data:
+            if isinstance(item, dict):
+                km_inr_format(item)
         return data
     return data
 
@@ -190,7 +207,7 @@ def ride_status_function(request):
 
     """
     currunt_time = timezone.now()
-    bookings = Booking.objects.all()
+    bookings = Booking.objects.filter(booking_status__in=["pending", "confirmed", "waitlisted", "active"])
 
     for booking in bookings:
         start = booking.carpool_driver_name.departure_time
@@ -206,7 +223,11 @@ def ride_status_function(request):
             booking.ride_status = "active"
 
         elif currunt_time >= end:
-            booking.ride_status = "completed"
+            if booking.booking_status in ["confirmed", "pending", "waitlisted"]:
+                booking.ride_status = "did_not_travelled"
+                booking.booking_status = "cancelled"
+            else:
+                booking.ride_status = "completed"
 
         booking.save()
 
@@ -296,8 +317,8 @@ def calculate_realistic_distance(lat1, lon1, lat2, lon2):
     float: Realistic distance between the two points in km
     """
     straight_distance = geodesic((lat1, lon1), (lat2, lon2)).km
-    # road factor ~1.3 (20% zyada)
-    return round(straight_distance * 1.3, 2)
+    # road factor ~1.2 (20% zyada)
+    return round(straight_distance * 1.2, 2)
 
 ## Calculate distance between two points, using geodesic library and haversine formula
 def calculate_distance(lat1, lon1, lat2, lon2):
@@ -395,7 +416,7 @@ def matches_location(search_loc, carpool_loc, user_lat, user_lon, carpool_lat, c
         if search_loc.lower() in carpool_loc.lower():
             return True
     except Exception as e:
-        return  Response({"status":"error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return False
     
     # Coordinate-based matching (20km radius)
     if user_lat and user_lon and carpool_lat and carpool_lon:

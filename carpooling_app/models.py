@@ -59,7 +59,7 @@ class Booking(models.Model):
     payment_mode = models.CharField(max_length=10, choices=[("cash", "Cash"), ("upi", "UPI")], default="cash")
     booking_status = models.CharField(max_length=20,choices=[("pending", "Pending"),("confirmed", "Confirmed"),("rejected", "Rejected"),("cancelled", "Cancelled"),
                                                              ("waitlisted", "Waitlisted"),],default="pending")
-    ride_status = models.CharField(max_length=20, choices=[("upcoming", "Upcoming"), ("active", "Active"), ("completed", "Completed"), ("cancelled", "Cancelled")], default="upcoming")
+    ride_status = models.CharField(max_length=20, choices=[("upcoming", "Upcoming"), ("active", "Active"), ("completed", "Completed"), ("cancelled", "Cancelled"), ("did_not_travelled", "Did Not Travelled")], default="upcoming")
     booked_by = models.ForeignKey(User, on_delete=models.CASCADE)
     booked_at = models.DateTimeField(auto_now_add=True)
     pickup_location = models.CharField(max_length=255, null=True, blank=True)
@@ -79,6 +79,8 @@ class Contact(models.Model):
     phone_number = models.CharField(max_length=12, unique=True)
     your_message = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
+    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name="updated_contact")
 
     def __str__(self):
         return f"{self.name} - {self.email}"
@@ -102,6 +104,8 @@ class ReviewRating(models.Model):
     rating = models.PositiveIntegerField()
     comment = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
+    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name="updated_review")
 
     def __str__(self):
         return f"{self.review_given_by.username} → {self.review_for.username} ({self.rating})"

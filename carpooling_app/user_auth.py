@@ -1,3 +1,4 @@
+import traceback
 from django.db.models import Q
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
@@ -154,24 +155,27 @@ def logout_user(request):
     Response: A JSON response with the status, message and data.
     """
     user = request.user
+    print("********** USER ********", user)
     refresh_token = request.data.get('refresh_token')
-
+    print("******** REFRESH TOKEN *********", refresh_token)
     try:
-        request.session.flush()
+        # request.session.flush()
+
+        if refresh_token:
+            print("********* REFRESH TOKEN *********", refresh_token)
+            try:
+                token = RefreshToken(refresh_token)
+                print("******** TOKEN *********", token)
+                token.blacklist()
+                print("******** BL TOKEN *********", token)
+            except Exception as e:
+                return Response({"status": "error", "message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            
+        return Response({"status": "success", "message": "Logged out successfully"}, status=status.HTTP_200_OK)
+
     except Exception as e:
-        return Response({"status":"fail", "message":str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
-    if refresh_token:
-        try:
-            token = RefreshToken(refresh_token)
-            token.blacklist()
-            activity(user, f"{user.username} logged out")
-
-        except Exception as e:
-            return Response({"status": "success", "message": str(e)}, status=status.HTTP_200_OK)
-
-    activity(user, f"{user.username} logged out")
-    return Response({"status": "success", "message": "Logged out successfully"}, status=status.HTTP_200_OK)
+        traceback.print_exc()
+        return Response({"status":"error", "message":str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 ## VIEW User profile data
 @api_view(['GET'])

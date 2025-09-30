@@ -82,6 +82,8 @@ DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 #media handle
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# AUTH_USER_MODEL = 'carpooling_app.User'
 #############################################################################################
 
 MIDDLEWARE = [

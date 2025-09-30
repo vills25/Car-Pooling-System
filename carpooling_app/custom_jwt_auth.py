@@ -2,7 +2,8 @@
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework import exceptions
 from rest_framework.permissions import BasePermission
-from .models import User
+from carpooling_app.models import User
+from rest_framework_simplejwt.tokens import RefreshToken
 
 class CustomJWTAuthentication(JWTAuthentication):
     def authenticate(self, request):
@@ -124,7 +125,6 @@ class IsDriverOrPassengerCustom(BasePermission):
 
 # Utility function to get tokens for user
 def get_tokens_for_user(user):
-    from rest_framework_simplejwt.tokens import RefreshToken
     
     refresh = RefreshToken.for_user(user)
     

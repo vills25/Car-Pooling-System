@@ -186,7 +186,7 @@ def my_bookings_info(request):
             "upcoming_bookings": BookingDetailSerializer(upcoming_bookings, many=True).data,
             "past_bookings": BookingDetailSerializer(past_bookings, many=True, context={"request": request}).data
         }
-        return Response({"status":"success","message":"Bookings fetched","data":{"Bookings":data}}, status=status.HTTP_200_OK)
+        return Response({"status":"success","message":"Bookings fetched","data":{"Bookings":km_inr_format(data)}}, status=status.HTTP_200_OK)
     
     except Exception as e:
         return Response({"status":"error","message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -245,6 +245,7 @@ def update_my_booking(request):
             booking.drop_location = data.get("drop_location", booking.drop_location)
             booking.contribution_amount = data.get("contribution_amount", booking.contribution_amount)
 
+            booking.updated_by = user
             booking.save()
             activity(user, f"{user.username} updated booking {booking_id}")
             serializer = BookingDetailSerializer(booking)

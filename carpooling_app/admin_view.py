@@ -8,7 +8,7 @@ from rest_framework import status
 from .user_auth import activity
 from .custom_jwt_auth import IsAdminCustom
 from .models import Activity, User, CreateCarpool, Booking
-from .serializers import ActivitySerializer,UserSerializer, CreateCarpoolSerializer, BookingSerializer
+from .serializers import ActivitySerializer, BookingDetailSerializer,UserSerializer, CreateCarpoolSerializer, BookingSerializer
 from .utils import user_is_admin
 
 
@@ -94,7 +94,7 @@ def admin_view_bookings(request):
     """
     try:
         bookings = Booking.objects.all().order_by("-booked_at")
-        serializer = BookingSerializer(bookings, many=True)
+        serializer = BookingDetailSerializer(bookings, many=True)
         return Response({"status": "success", "Bookings": serializer.data}, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({"status":"error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

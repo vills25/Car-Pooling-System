@@ -505,6 +505,7 @@ def update_carpool(request):
             except ValueError:
                 return Response({"status":"fail", "message":"total_passenger_allowed must be integer"}, status=status.HTTP_400_BAD_REQUEST)
 
+        carpool.updated_by = user
         carpool.save()
         activity(user, f"{user.username} updated carpool {carpool.createcarpool_id}")
         serializer = CreateCarpoolSerializer(carpool)
@@ -567,12 +568,12 @@ def view_my_carpools(request):
         currunt_time = timezone.now()
         upcoming_carpool = CreateCarpool.objects.filter(carpool_creator_driver=user, departure_time__gte=currunt_time).order_by("departure_time")
         past_carpool = CreateCarpool.objects.filter(carpool_creator_driver=user, departure_time__lt=currunt_time).order_by("-departure_time")
-        both_data = {
+        data = {
             "upcoming_carpool": CreateCarpoolSerializer(upcoming_carpool, many=True).data,
             "past_carpool": CreateCarpoolSerializer(past_carpool, many=True).data
         }
         
-        return Response({"status":"success","message":"Carpools data fetched", "Data":{"Carpools": both_data}}, status=status.HTTP_200_OK)
+        return Response({"status":"success","message":"Carpools data fetched", "Data":{"Carpools": km_inr_format(data)}}, status=status.HTTP_200_OK)
     
     except Exception as e:
         return Response({"status":"error","message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
