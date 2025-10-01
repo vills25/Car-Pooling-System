@@ -8,8 +8,7 @@ from rest_framework import status
 from .user_auth import activity
 from .custom_jwt_auth import IsAdminCustom
 from .models import Activity, User, CreateCarpool, Booking
-from .serializers import ActivitySerializer, BookingDetailSerializer,UserSerializer, CreateCarpoolSerializer, BookingSerializer
-from .utils import user_is_admin
+from .serializers import ActivitySerializer, BookingDetailSerializer,UserSerializer, CreateCarpoolSerializer
 
 
 ## View all User for admin view

@@ -1,4 +1,4 @@
-import traceback
+from tokenize import TokenError
 from django.db.models import Q
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.db import transaction
 from django.utils import timezone
+from carpooling_app.admin import TokenBlacklistLogoutAdmin
 from .models import *
 from .serializers import *
 from .custom_jwt_auth import IsAuthenticatedCustom
@@ -106,6 +107,7 @@ def login_user(request):
 
     try:
         user = User.objects.filter( Q(username=username) | Q(email=username) | Q(phone_number=username)).first()
+        # token = TokenBlacklistLogout.objects.filter(user=user, is_expire = False).update(is_expire=True,expire_datetime=timezone.now())
 
         if not user:
             return Response({"status":"fail","message":"User not found"}, status=status.HTTP_404_NOT_FOUND)
@@ -139,43 +141,35 @@ def login_user(request):
     except Exception as e:
         return Response({"status":"error", "message": str(e)}, status= status.HTTP_400_BAD_REQUEST)
 
-## Logout User (Sign-Out) session based
+## Logout User (Sign-Out)
 @api_view(['POST'])
 @permission_classes([IsAuthenticatedCustom])
 def logout_user(request):
-
     """
-    Logout user from the system.
-
-    Parameters:
-    request (HttpRequest): Request object passed in by the Django framework.
-    refresh_token (str): The refresh token to blacklist.
-
-    Returns:
-    Response: A JSON response with the status, message and data.
+    Logout user from the system by blacklisting the refresh token
+    and saving it in the TokenBlacklistLogout table.
     """
-    user = request.user
-    print("********** USER ********", user)
-    refresh_token = request.data.get('refresh_token')
-    print("******** REFRESH TOKEN *********", refresh_token)
     try:
-        # request.session.flush()
+        access_token = request.auth 
 
-        if refresh_token:
-            print("********* REFRESH TOKEN *********", refresh_token)
-            try:
-                token = RefreshToken(refresh_token)
-                print("******** TOKEN *********", token)
-                token.blacklist()
-                print("******** BL TOKEN *********", token)
-            except Exception as e:
-                return Response({"status": "error", "message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-            
-        return Response({"status": "success", "message": "Logged out successfully"}, status=status.HTTP_200_OK)
+        if isinstance(access_token, bytes):
+            access_token = access_token.decode("utf-8")
+
+        with transaction.atomic():
+            TokenBlacklistLogout.objects.create(
+                user=request.user,
+                token=str(access_token),
+                is_expired=True,
+                expire_datetime=timezone.now()
+            )
+
+        return Response({"status": "success", "message": "Logged out successfully"},status=status.HTTP_200_OK)
+
+    except TokenError as e:
+        return Response({"status": "error", "message": f"Token error: {str(e)}"},status=status.HTTP_400_BAD_REQUEST)
 
     except Exception as e:
-        traceback.print_exc()
-        return Response({"status":"error", "message":str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"status": "error", "message": f"Logout failed: {str(e)}"},status=status.HTTP_400_BAD_REQUEST)
 
 ## VIEW User profile data
 @api_view(['GET'])

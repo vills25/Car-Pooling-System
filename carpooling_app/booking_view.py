@@ -177,7 +177,7 @@ def my_bookings_info(request):
     user = request.user
     try:
         current_time = timezone.now()
-        print("####### CURRUNT TIME >>>>>>>>>>>>>>>>>>>", current_time)
+
         ride_status_function(request) #calling helper function for ride status
         upcoming_bookings = Booking.objects.filter(passenger_name=user, carpool_driver_name__departure_time__gte=current_time).order_by("carpool_driver_name__departure_time")
         past_bookings = Booking.objects.filter(passenger_name=user, carpool_driver_name__departure_time__lt=current_time).order_by("-carpool_driver_name__departure_time")

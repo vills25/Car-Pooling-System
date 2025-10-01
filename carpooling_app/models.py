@@ -108,4 +108,14 @@ class ReviewRating(models.Model):
     updated_by = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name="updated_review")
 
     def __str__(self):
-        return f"{self.review_given_by.username} → {self.review_for.username} ({self.rating})"
+        return f"{self.review_given_by.username} > {self.review_for.username} ({self.rating})"
+
+## model for token blacklist(logout flow)
+class TokenBlacklistLogout(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    token = models.CharField(max_length=500, null=True, blank=True)
+    is_expired = models.BooleanField(default=False, null=True, blank=True)
+    expire_datetime = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return self.token

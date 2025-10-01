@@ -29,9 +29,13 @@ class ReviewRatingAdmin(admin.ModelAdmin):
     list_display = ('review_id', 'review_given_by', 'review_for', 'carpool_driver','booking_person_name', 'rating')
     search_fields = ['review_id', 'review_given_by', 'review_for']
 
+class TokenBlacklistLogoutAdmin(admin.ModelAdmin):
+    list_display = ('user','is_expired','expire_datetime','token')
+
 admin.site.register(User, UserAdmin)
 admin.site.register(CreateCarpool,CreateCarpoolAdmin)
 admin.site.register(Booking,BookingAdmin)
-admin.site.register(Activity,ActivityAdmin)
+admin.site.register(Activity,ActivityAdmin) 
 admin.site.register(Contact,ContactAdmin)
 admin.site.register(ReviewRating,ReviewRatingAdmin)
+admin.site.register(TokenBlacklistLogout,TokenBlacklistLogoutAdmin)

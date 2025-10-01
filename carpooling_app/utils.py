@@ -415,7 +415,7 @@ def matches_location(search_loc, carpool_loc, user_lat, user_lon, carpool_lat, c
     try:
         if search_loc.lower() in carpool_loc.lower():
             return True
-    except Exception as e:
+    except Exception:
         return False
     
     # Coordinate-based matching (20km radius)
@@ -424,7 +424,7 @@ def matches_location(search_loc, carpool_loc, user_lat, user_lon, carpool_lat, c
         if distance <= 20:
             return True
 
-    # Token-based matching (check if search terms appear in carpool location)
+    #check if search terms appear in carpool location
     search_terms = search_loc.lower().split()
     carpool_text = carpool_loc.lower() if carpool_loc else ""
     
