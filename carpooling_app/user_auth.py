@@ -1,5 +1,3 @@
-from multiprocessing import context
-import profile
 from tokenize import TokenError
 from django.db.models import Q
 from requests import get
@@ -11,7 +9,6 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.db import transaction
 from django.utils import timezone
-from carpooling_app.admin import TokenBlacklistLogoutAdmin
 from .models import *
 from .serializers import *
 from .custom_jwt_auth import IsAuthenticatedCustom
