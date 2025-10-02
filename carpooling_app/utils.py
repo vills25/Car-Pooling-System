@@ -1,3 +1,4 @@
+from django.forms import ValidationError
 from django.utils import timezone
 import random
 from django.core.mail import send_mail
@@ -247,6 +248,16 @@ def send_contact_email(name, email, phone_number, your_message):
     from_email = settings.DEFAULT_FROM_EMAIL
     to_email = settings.DEFAULT_FROM_EMAIL
     send_mail(subject, message, from_email, [to_email])
+
+## validate images size and type(jpg, png, jpeg)
+def validate_image(image):
+    allowed_extensions = ['jpg', 'png', 'jpeg']
+    image_extension = image.name.split('.')[-1].lower()
+    if image_extension not in allowed_extensions:
+        raise ValidationError(f"Invalid image format. Allowed formats: {', '.join(allowed_extensions)}")
+    
+    if image.size > 2 * 1024 * 1024:
+        raise ValidationError("Image size should not exceed 2MB.")
 
 OSRM_BASE_URL = "http://router.project-osrm.org"  # public demo server; for production consider self-hosting
 

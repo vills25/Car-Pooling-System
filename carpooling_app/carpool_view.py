@@ -3,7 +3,7 @@ from .user_auth import activity
 from .utils import *
 from .models import CreateCarpool
 from .serializers import CreateCarpoolSerializer
-from .custom_jwt_auth import IsDriverCustom, IsAuthenticatedCustom, IsDriverOrPassengerCustom
+from .custom_jwt_auth import IsAdminOrDriverCustom, IsDriverCustom, IsAuthenticatedCustom, IsDriverOrPassengerCustom
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
@@ -414,7 +414,7 @@ def create_carpool(request):
 ## user who created carpool will assigned driver role and only he can with driver role UPDATE/DELETE/VIEW his carpool details.
 ## Edit Carpool details 
 @api_view(['PUT'])
-@permission_classes([IsDriverCustom])
+@permission_classes([IsAdminOrDriverCustom])
 def update_carpool(request):
     """
     This API will update the details of a carpool created by the user.
@@ -520,7 +520,7 @@ def update_carpool(request):
     
 ## Delete Carpool
 @api_view(['DELETE'])
-@permission_classes([IsDriverCustom])
+@permission_classes([IsAdminOrDriverCustom])
 def delete_carpool(request):
     """
     Delete a carpool created by the user.

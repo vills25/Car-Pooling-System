@@ -1,5 +1,8 @@
+from multiprocessing import context
+import profile
 from tokenize import TokenError
 from django.db.models import Q
+from requests import get
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -12,7 +15,7 @@ from carpooling_app.admin import TokenBlacklistLogoutAdmin
 from .models import *
 from .serializers import *
 from .custom_jwt_auth import IsAuthenticatedCustom
-from .utils import activity, send_otp_email, generate_otp, send_contact_email
+from .utils import *
 
 ## Register User (Sign-Up)
 @api_view(['POST'])
@@ -43,7 +46,13 @@ def register_user(request):
     enter_role = request.data.get('role','Passenger')
     enter_address = request.data.get('address')
     enter_gender = request.data.get('gender')
-
+    enter_profile_pic = request.FILES.get('profile_pic')
+    if enter_profile_pic:
+        try:
+            validate_image(enter_profile_pic)
+        except ValidationError as e:
+            return Response({"status":"fail","message":str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    
     if not request.data.get("username") or not request.data.get("email") or not request.data.get("password") or not request.data.get("confirm_password"):
         return Response({"status":"fail","message":"username, email, password required"}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -76,10 +85,11 @@ def register_user(request):
                 role = enter_role,
                 address = enter_address,
                 gender = enter_gender,
+                profile_pic = enter_profile_pic,
                 is_active = True
             )
             activity(user, f"User registered with username {user.username}")
-            serializer = UserSerializer(user)
+            serializer = UserSerializer(user, context={'request': request})
             return Response({"status":"success","message":"User registered successfully","User":serializer.data}, status=status.HTTP_201_CREATED)
         
     except Exception as e:
@@ -131,7 +141,6 @@ def login_user(request):
             "data":{
                 "User": user_data,
                 "access_token": str(refresh.access_token),
-                "refresh_token": str(refresh),
             }
         }, status=status.HTTP_200_OK)
 
@@ -240,6 +249,10 @@ def update_profile(request):
         get_gender = request.data.get('gender')
 
         with transaction.atomic():
+            
+            if request.user.user_id != user.user_id and not request.user.is_superuser:
+                return Response({"status":"fail", "message": "you can not update others profile"}, status=status.HTTP_403_FORBIDDEN)
+
             if get_username is not None:
                 if User.objects.filter(username=get_username).exclude(user_id=user.user_id).exists():
                     return Response({"status":"fail", "message": "Username already taken"}, status=status.HTTP_400_BAD_REQUEST)
@@ -272,8 +285,11 @@ def update_profile(request):
                 user.gender = get_gender
 
             if get_profile_pic is not None:
+                validate_image(get_profile_pic)
                 user.profile_pic = get_profile_pic
 
+            user.updated_at = timezone.now()
+            user.updated_by = request.user
             user.save()
 
             activity(user, f"{user.username} updated his profile")
