@@ -1,6 +1,5 @@
 from tokenize import TokenError
 from django.db.models import Q
-from requests import get
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -40,7 +39,7 @@ def register_user(request):
     enter_last_name = request.data.get('last_name')
     enter_email = request.data.get('email')
     enter_phone_number = request.data.get('phone_number')
-    enter_role = request.data.get('role','Passenger')
+    enter_role = request.data.get('role','passenger')
     enter_address = request.data.get('address')
     enter_gender = request.data.get('gender')
     enter_profile_pic = request.FILES.get('profile_pic')
@@ -88,7 +87,7 @@ def register_user(request):
             activity(user, f"User registered with username {user.username}")
             serializer = UserSerializer(user, context={'request': request})
             return Response({"status":"success","message":"User registered successfully","User":serializer.data}, status=status.HTTP_201_CREATED)
-        
+
     except Exception as e:
         return Response({"status":"error","message":str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -320,7 +319,7 @@ def delete_profile(request):
     if not user_id:
         return Response({"status":"fail", "message": "enter user_id please"}, status=status.HTTP_400_BAD_REQUEST)
     
-    if not request.user.is_superuser and request.user.user_id != user_id:
+    if not request.user.is_superuser and request.user.user_id != user.user_id:
         return Response({"status":"fail", "message": "you can not delete others profile"}, status=status.HTTP_403_FORBIDDEN)
 
     try:

@@ -3,7 +3,7 @@ from .user_auth import activity
 from .utils import *
 from .models import CreateCarpool
 from .serializers import CreateCarpoolSerializer
-from .custom_jwt_auth import IsAdminOrDriverCustom, IsDriverCustom, IsAuthenticatedCustom, IsDriverOrPassengerCustom
+from .custom_jwt_auth import IsAdminOrDriverCustom, IsAuthenticatedCustom, IsDriverCustom, IsDriverOrPassengerCustom
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
@@ -11,7 +11,6 @@ from django.db import transaction
 from django.utils import timezone
 from django.db.models import Sum
 from rest_framework.permissions import AllowAny
-from rest_framework.pagination import PageNumberPagination
 
 #-------- PUBLIC (Anyone can see this details) --------#
 
@@ -577,3 +576,82 @@ def view_my_carpools(request):
     
     except Exception as e:
         return Response({"status":"error","message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+## start or end a ride
+@api_view(["POST"])
+@permission_classes([IsAdminOrDriverCustom])
+def start_end_ride_driver(request):
+    """
+    This API is used to start or end a ride as a driver.
+
+    Parameters:
+    carpool_id (int): required
+    start_ride (bool): optional
+    end_ride (bool): optional
+
+    Returns:
+    A JSON response with the status, message, and ride status of the carpool.
+
+    If the ride has already been started or completed, it will return a 400 status code with a message "Ride already active or completed."
+
+    If the ride is cancelled due to arrival time being passed, it will return a 400 status code with a message "Cannot start ride, arrival time passed. Ride cancelled."
+
+    If the ride is completed successfully, it will return a 200 status code with a message "Ride completed successfully."
+
+    If the request is invalid, it will return a 400 status code with a message "Please pass 'start_ride' or 'end_ride' as True."
+
+    If an unexpected error occurs, it will return a 500 status code with a message describing the error.
+    """
+    try:
+        carpool_id = request.data.get("carpool_id")
+        if not carpool_id:
+            return Response({"status": "fail", "message": "carpool_id is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            carpool = CreateCarpool.objects.get(createcarpool_id=carpool_id)
+        except CreateCarpool.DoesNotExist:
+            return Response({"status": "fail", "message": "Carpool not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if carpool.carpool_creator_driver != request.user:
+            return Response({"status": "fail", "message": "You are not the driver of this carpool."}, status=status.HTTP_403_FORBIDDEN)
+
+        start_ride = request.data.get("start_ride", False)
+        end_ride = request.data.get("end_ride", False)
+        current_time = timezone.now()
+
+        # ---------- START RIDE ----------
+        if start_ride:
+            if carpool.carpool_ride_status in ["active", "completed"]:
+                return Response({"status": "fail", "message": "Ride already active or completed."}, status=status.HTTP_400_BAD_REQUEST)
+
+            if current_time > carpool.arrival_time:
+                carpool.carpool_ride_status = "cancelled"
+                carpool.save()
+                Booking.objects.filter(carpool_driver_name=carpool).update(ride_status="cancelled", booking_status="cancelled")
+                return Response({"status": "fail", "message": "Cannot start ride, arrival time passed. Ride cancelled."}, status=status.HTTP_400_BAD_REQUEST)
+
+            carpool.carpool_ride_status = "active"
+            carpool.save()
+            Booking.objects.filter(carpool_driver_name=carpool).update(ride_status="active")
+
+            activity(request.user, f"Started ride for Carpool ID: {carpool_id}")
+            return Response({"status": "success", "message": "Ride started successfully.", "ride_status": carpool.carpool_ride_status}, status=status.HTTP_200_OK)
+
+        # ---------- END RIDE ----------
+        elif end_ride:
+            if carpool.carpool_ride_status != "active":
+                return Response({"status": "fail", "message": "Cannot end ride. Ride is not active."}, status=status.HTTP_400_BAD_REQUEST)
+
+            carpool.carpool_ride_status = "completed"
+            carpool.save()
+            Booking.objects.filter(carpool_driver_name=carpool).update(ride_status="completed", booking_status="confirmed")
+
+            activity(request.user, f"Completed ride for Carpool ID: {carpool_id}")
+            return Response({"status": "success", "message": "Ride completed successfully.", "ride_status": carpool.carpool_ride_status}, status=status.HTTP_200_OK)
+
+        else:
+            return Response({"status": "fail", "message": "Please pass 'start_ride' or 'end_ride' as True."}, status=status.HTTP_400_BAD_REQUEST)
+
+    except Exception as e:
+        return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+

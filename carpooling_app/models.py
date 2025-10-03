@@ -33,6 +33,8 @@ class CreateCarpool(models.Model):
     add_note = models.TextField(blank=True, null=True)
     allow_luggage = models.BooleanField(default=True)
     gender_preference = models.CharField(max_length=10, choices=[("any", "Any"),("male", "Male"),("female", "Female")], default="any")
+    carpool_ride_status = models.CharField(max_length=20, choices=[("upcoming", "Upcoming"),("not_started_yet", "Not Started Yet"),("active", "Active"),("completed", "Completed"),
+                                                                    ("cancelled", "Cancelled"),("auto_completed", "Auto Completed")], default="upcoming")
     contact_info = models.TextField(null=True, blank=True)
     car_model = models.CharField(max_length=50, null=True, blank=True) 
     car_number = models.CharField(max_length=20, null=True, blank=True) 

@@ -38,6 +38,7 @@ urlpatterns = [
     path('carpool/delete/', delete_carpool),
     path('carpool/my-carpools/', view_my_carpools),
     path('carpool/view-passengers/', view_booked_passenger),
+    path('carpool/start-end-rides/', start_end_ride_driver),
 
     #-------- BOOK CARPOOL --------#
     path("booking/create/",book_carpool),

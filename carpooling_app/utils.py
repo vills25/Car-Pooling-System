@@ -1,3 +1,4 @@
+from datetime import timedelta
 from django.forms import ValidationError
 from django.utils import timezone
 import random
@@ -14,6 +15,8 @@ from math import atan2, radians, cos, sin, sqrt
 from geopy.distance import geodesic
 from django.db.models import Q
 from rest_framework import status
+from django.utils import timezone
+from datetime import timedelta
 
 def user_is_admin(user):
     """
@@ -197,40 +200,71 @@ def send_booking_email(booking, status_type):
         print("Email send failed:", e)
 
 ## Helper function for Ride status 
-def ride_status_function(request):
+def ride_status_function(request=None):
     """
-    This function is used to update the ride status of all bookings based on the current time.
-    It loops through all bookings and checks the current time against the departure and arrival times of the carpool.
-    If the booking status is "cancelled", the ride status is set to "cancelled".
-    If the current time is greater than the departure time, the ride status is set to "upcoming".
-    If the current time is between the departure and arrival times, the ride status is set to "active".
-    If the current time is greater than or equal to the arrival time, the ride status is set to "completed".
-
+    Auto update ride + booking status for all carpools and bookings
+    based on time, driver action, and passenger action.
     """
-    currunt_time = timezone.now()
-    bookings = Booking.objects.filter(booking_status__in=["pending", "confirmed", "waitlisted", "active"])
+    current_time = timezone.now()
+    carpools = CreateCarpool.objects.all()
 
-    for booking in bookings:
-        start = booking.carpool_driver_name.departure_time
-        end = booking.carpool_driver_name.arrival_time
+    for carpool in carpools:
+        start = carpool.departure_time
+        end = carpool.arrival_time
+        original_status = carpool.carpool_ride_status
 
-        if booking.booking_status == "cancelled":
-            booking.ride_status = "cancelled"
+        #  Not started yet but departure passed 
+        if carpool.carpool_ride_status == "upcoming" and start <= current_time < end:
+            carpool.carpool_ride_status = "not_started_yet"
 
-        elif start > currunt_time:
-            booking.ride_status = "upcomming"
+        #  Ride cancelled, if not started by arrival time 
+        elif carpool.carpool_ride_status in ["upcoming", "not_started_yet"] and current_time >= end:
+            carpool.carpool_ride_status = "cancelled"
 
-        elif start <= currunt_time < end:
-            booking.ride_status = "active"
+        #  Auto complete rides active but 1 hour past arrival 
+        elif carpool.carpool_ride_status == "active" and current_time > (end + timedelta(hours=1)):
+            carpool.carpool_ride_status = "auto_completed"
 
-        elif currunt_time >= end:
-            if booking.booking_status in ["confirmed", "pending", "waitlisted"]:
-                booking.ride_status = "did_not_travelled"
-                booking.booking_status = "cancelled"
-            else:
-                booking.ride_status = "completed"
+        #  Save only if changed
+        if carpool.carpool_ride_status != original_status:
+            carpool.save()
 
-        booking.save()
+        #  Update all bookings 
+        bookings = Booking.objects.filter(carpool_driver_name=carpool)
+        for booking in bookings:
+            # Passenger cancelled
+            if booking.booking_status == "cancelled":
+                booking.ride_status = "cancelled"
+
+            # Ride cancelled by driver/system
+            elif carpool.carpool_ride_status == "cancelled":
+                if booking.booking_status in ["pending", "waitlisted", "confirmed"]:
+                    booking.ride_status = "did_not_travelled"
+                    booking.booking_status = "cancelled"
+
+            # Ride active
+            elif carpool.carpool_ride_status == "active":
+                booking.ride_status = "active"
+
+            # Ride completed
+            elif carpool.carpool_ride_status in ["completed", "auto_completed"]:
+                if booking.booking_status == "confirmed":
+                    booking.ride_status = "completed"
+
+                elif booking.booking_status in ["pending", "waitlisted"]:
+                    booking.ride_status = "did_not_travelled"
+                    booking.booking_status = "cancelled"
+                    
+            # Ride not started yet
+            elif carpool.carpool_ride_status == "not_started_yet" and current_time > start:
+                if booking.booking_status in ["pending", "waitlisted", "confirmed"]:
+                    booking.ride_status = "upcoming"
+
+            # Upcoming
+            elif current_time < start:
+                booking.ride_status = "upcoming"
+
+            booking.save()
 
 ## send/receive contacts form from user to admin.
 def send_contact_email(name, email, phone_number, your_message):

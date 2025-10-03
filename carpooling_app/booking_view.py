@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.db import transaction
 from django.utils import timezone
-from .custom_jwt_auth import IsDriverOrPassengerCustom, IsDriverCustom
+from .custom_jwt_auth import IsAdminCustom, IsAuthenticatedCustom, IsDriverOrPassengerCustom, IsDriverCustom
 from .models import CreateCarpool, Booking, User, ReviewRating
 from .serializers import BookingDetailSerializer, BookingSerializer, ReviewRatingSerializer
 from .user_auth import activity
@@ -15,7 +15,7 @@ from django.db.models import Avg
 
 # Book a seat in carpool (Only Logged-in(Registered) user can book only available upcomming carpools)
 @api_view(['POST'])
-@permission_classes([IsDriverOrPassengerCustom])
+@permission_classes([IsDriverOrPassengerCustom, IsAdminCustom])
 def book_carpool(request):
     """
     Book a seat in carpool.
@@ -160,7 +160,7 @@ def book_carpool(request):
 
 ## get booking info
 @api_view(['GET'])
-@permission_classes([IsDriverOrPassengerCustom])
+@permission_classes([IsDriverOrPassengerCustom, IsAdminCustom])
 def my_bookings_info(request):
     """
     Fetch booking information for a user.
@@ -193,7 +193,7 @@ def my_bookings_info(request):
 
 # Update booking (change seat count or pickup/drop)
 @api_view(['PUT'])
-@permission_classes([IsDriverOrPassengerCustom])
+@permission_classes([IsDriverOrPassengerCustom, IsAdminCustom])
 def update_my_booking(request):
     """
     Update booking information for a user.
@@ -259,7 +259,7 @@ def update_my_booking(request):
 
 ## cancel my bokked ride
 @api_view(['DELETE'])
-@permission_classes([IsDriverOrPassengerCustom])
+@permission_classes([IsDriverOrPassengerCustom, IsAdminCustom])
 def cancel_booking(request):
     """
     Cancel a booking.
@@ -320,7 +320,7 @@ def cancel_booking(request):
 
 ## sort/filter for user of his booking , like sort according to time, date, etc...
 @api_view(['POST'])
-@permission_classes([IsDriverOrPassengerCustom])
+@permission_classes([IsDriverOrPassengerCustom, IsAdminCustom])
 def filter_bookings(request):
     """
     Filter and sort bookings made by a user.
@@ -360,7 +360,7 @@ def filter_bookings(request):
 
 ## booking request from passenger view for driver role.
 @api_view(['GET'])
-@permission_classes([IsDriverCustom])
+@permission_classes([IsDriverCustom, IsAdminCustom])
 def driver_view_booking_requests(request):
     """
     Returns a list of all pending booking requests for a driver.
@@ -386,7 +386,7 @@ def driver_view_booking_requests(request):
 
 ## Approve/Reject booking request from passenger view for driver role.
 @api_view(['PUT'])
-@permission_classes([IsDriverCustom])
+@permission_classes([IsDriverCustom, IsAdminCustom])
 def driver_approve_reject_booking(request):
     """
     Approve or reject a booking request from a passenger.
@@ -452,7 +452,7 @@ def driver_approve_reject_booking(request):
     
 ## view each confirmed booking passenger for each carpool
 @api_view(['GET'])
-@permission_classes([IsDriverCustom])
+@permission_classes([IsDriverCustom, IsAdminCustom])
 def view_booked_passenger(request):
     """
     Returns a list of confirmed bookings for all carpools created by the requesting user (driver).
@@ -485,7 +485,7 @@ def view_booked_passenger(request):
 
 ## send email to passanger when ride is about to start before 40 minutes, if no journey is scheduled then return response as no upcoming rides.
 @api_view(['GET'])
-@permission_classes([IsDriverCustom])
+@permission_classes([IsDriverCustom, IsAdminCustom])
 def ride_reminder_notifications(request):
     """
       -  Send ride reminders to passengers 40 minutes before their scheduled departure time.
@@ -598,7 +598,7 @@ def ride_reminder_notifications(request):
 
 ## give review
 @api_view(["POST"])
-@permission_classes([IsDriverOrPassengerCustom])
+@permission_classes([IsAuthenticatedCustom])
 def give_review_rating(request):
     """
     Add review for a driver (review_given_by = request.user)
@@ -674,7 +674,7 @@ def give_review_rating(request):
 
 ## view driver info
 @api_view(["POST"])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticatedCustom])
 def view_driver_info(request):
     """
     Get driver info + stats + reviews

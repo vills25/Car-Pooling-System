@@ -21,7 +21,7 @@ class CreateCarpoolSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CreateCarpool
-        fields = ['createcarpool_id', 'driver', 'driver_average_rating','start_location', 'end_location','departure_time', 'arrival_time','available_seats', 'total_passenger_allowed','contribution_per_km', 
+        fields = ['createcarpool_id', 'driver', 'driver_average_rating','carpool_ride_status','start_location', 'end_location','departure_time', 'arrival_time','available_seats', 'total_passenger_allowed','contribution_per_km', 
                   'distance_km','add_note', 'allow_luggage','gender_preference','contact_info','car_model', 'car_number', 'created_at','updated_at', 'updated_by']
 
     def get_driver_average_rating(self, obj):
@@ -36,7 +36,7 @@ class CarpoolDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CreateCarpool
-        fields = ['createcarpool_id', 'carpool_driver_name','start_location', 'end_location','departure_time', 'arrival_time','available_seats', 'total_passenger_allowed',
+        fields = ['createcarpool_id', 'carpool_driver_name','carpool_ride_status','start_location', 'end_location','departure_time', 'arrival_time','available_seats', 'total_passenger_allowed',
                   'contribution_per_km', 'distance_km','add_note', 'contact_info', 'allow_luggage','car_model', 'car_number','updated_by']
 
     def get_carpool_driver_name(self, obj):
@@ -60,7 +60,7 @@ class BookingDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Booking
         fields = ['booking_id', 'passenger_name', 'seat_book', 'distance_travelled', 'contribution_amount', 'payment_mode', 'booking_status', 'ride_status', 'booked_by', 'booked_at',
-            'pickup_location', 'drop_location', 'contact_info','carpool_detail', "updated_at", "updated_by"]
+            'pickup_location', 'drop_location', 'contact_info','updated_at', 'updated_by','carpool_detail']
 
     def get_passenger_name(self, obj):
         return obj.passenger_name.first_name if obj.passenger_name else None
