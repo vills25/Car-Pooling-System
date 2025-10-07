@@ -14,10 +14,21 @@ class User(models.Model):
     is_active = models.BooleanField(default=False)
     address = models.TextField(null=True, blank=True)
     gender = models.CharField(max_length=10, choices=[("male", "Male"), ("female", "Female"), ("other", "Other")], null=True, blank=True)
+    earning = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
     def __str__(self):
         return f"{self.user_id} ({self.username})"
-    
+
+## Store User Dashboard Info
+class UserDashboardInfo(models.Model):
+    dashboard_id = models.AutoField(primary_key=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    total_carpools = models.IntegerField(default=0)
+    total_bookings = models.IntegerField(default=0)
+    total_earning = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
+
 ## Carpool Model
 class CreateCarpool(models.Model):
     createcarpool_id = models.AutoField(primary_key=True)

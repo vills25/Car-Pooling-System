@@ -10,7 +10,7 @@ from django.db import transaction
 from django.utils import timezone
 from .models import *
 from .serializers import *
-from .custom_jwt_auth import IsAuthenticatedCustom
+from .custom_jwt_auth import IsAdminCustom, IsAuthenticatedCustom, IsDriverOrPassengerCustom
 from .utils import *
 
 ## Register User (Sign-Up)
@@ -200,17 +200,99 @@ def view_profile(request):
             return Response({"status":"fail", "message":"user not found/exist"}, status= status.HTTP_404_NOT_FOUND)
         
         serializer_data = UserSerializer(user, context={'request': request})
+        total_earnings = count_earning(user.user_id)
 
-        return Response({
-            "status":"success", 
-            "message":"user profile data fetched",
-                "data":{
-                    "User": serializer_data.data
-                    }
-            }, status=status.HTTP_200_OK)
-        
+        return Response({"status":"success", "message":"user profile data fetched","data":{"User": serializer_data.data}}, status=status.HTTP_200_OK)
+
     except Exception as e:
         return Response({"status":"error", "message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+## User Dashboard
+@api_view(['GET'])
+@permission_classes([IsDriverOrPassengerCustom | IsAdminCustom])
+def user_dashboard(request):
+    """
+    Fetch dynamic user dashboard data including overview, user info,
+    user's carpools with extra details, and bookings with extra info.
+    """
+    user = request.user
+
+    if not user :
+        return Response({"status": "fail", "message": "User not found/exist"},status=status.HTTP_404_NOT_FOUND)
+
+    try:
+        with transaction.atomic():
+
+            # --- Calculate metrics ---
+            total_carpools = CreateCarpool.objects.filter(carpool_creator_driver=user).count()
+            total_bookings = Booking.objects.filter(carpool_driver_name__carpool_creator_driver=user).count()
+            total_earning = count_earning(user.user_id)
+
+            # --- Update dashboard only if needed ---
+            dashboard_data, created = UserDashboardInfo.objects.get_or_create(user=user)
+            if (dashboard_data.total_carpools != total_carpools or
+                dashboard_data.total_bookings != total_bookings or
+                dashboard_data.total_earning != total_earning):
+
+                dashboard_data.total_carpools = total_carpools
+                dashboard_data.total_bookings = total_bookings
+                dashboard_data.total_earning = total_earning
+                dashboard_data.save()
+
+        # --- Serialize main data ---
+        dashboard_serialized = UserDashboardInfoSerializer(dashboard_data, context={'request': request})
+        user_serialized = UserSerializer(user, context={'request': request})
+
+        # --- Prepare dynamic carpools list ---
+        carpools_queryset = CreateCarpool.objects.filter(carpool_creator_driver=user)
+        carpools_list = []
+        for carpool in carpools_queryset:
+            carpools_list.append({
+                "createcarpool_id": carpool.createcarpool_id,
+                "start_location": carpool.start_location,
+                "end_location": carpool.end_location,
+                "departure_time": carpool.departure_time,
+                "arrival_time": carpool.arrival_time,
+                "available_seats": carpool.available_seats,
+                "carpool_ride_status": carpool.carpool_ride_status,
+                "bookings_count": Booking.objects.filter(carpool_driver_name=carpool).count()
+            })
+
+        # --- Prepare dynamic bookings list ---
+        bookings_queryset = Booking.objects.filter(carpool_driver_name__carpool_creator_driver=user)
+        bookings_list = []
+        for booking in bookings_queryset:
+            bookings_list.append({
+                "booking_id": booking.booking_id,
+                "passenger_name": booking.passenger_name.username,
+                "carpool_id": booking.carpool_driver_name.createcarpool_id,
+                "start_location": booking.carpool_driver_name.start_location,
+                "end_location": booking.carpool_driver_name.end_location,
+                "booking_status": booking.booking_status,
+            })
+
+        # --- Dynamic message based on data ---
+        if total_carpools == 0:
+            message = "You haven't created any carpools yet."
+
+        elif total_bookings == 0:
+            message = "No bookings yet for your carpools."
+
+        else:
+            message = "User dashboard data fetched successfully."
+
+        # --- Final response data ---
+        data = {
+            "Overview": dashboard_serialized.data,
+            "User": user_serialized.data,
+            "carpools": carpools_list,
+            "bookings": bookings_list
+        }
+
+        return Response({"status": "success", "message": message, "data": {"Dashboard": data}},status=status.HTTP_200_OK)
+
+    except Exception as e:
+        return Response({"status": "error", "message": str(e)},status=status.HTTP_400_BAD_REQUEST)
 
 ## UPDATE User profile view
 @api_view(['PUT'])

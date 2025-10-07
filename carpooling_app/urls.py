@@ -12,6 +12,7 @@ urlpatterns = [
     path('login/', login_user),
     path('logout_user/', logout_user),
     path('profile/my-profile/',view_profile),
+    path('profile/user-dashboard/', user_dashboard),
     path('profile/update-profile/', update_profile),
     path('profile/delete-profile/', delete_profile),
     path('profile/forgot-password/', forgot_password),

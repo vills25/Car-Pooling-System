@@ -9,6 +9,10 @@ class UserAdmin(admin.ModelAdmin):
     list_display = ('username', 'first_name', 'email', 'role','is_active')
     search_fields = ['username', 'email', 'first_name']
 
+class UserDashboardInfoAdmin(admin.ModelAdmin):
+    list_display = ('user', 'total_carpools', 'total_bookings', 'total_earning')
+    search_fields = ['user']
+
 class CreateCarpoolAdmin(admin.ModelAdmin):
     list_display = ('createcarpool_id','carpool_creator_driver','start_location','end_location','departure_time','carpool_ride_status','contribution_per_km','distance_km')
     search_fields = ['carpool_creator_driver','createcarpool_id']
@@ -33,6 +37,7 @@ class TokenBlacklistLogoutAdmin(admin.ModelAdmin):
     list_display = ('user','is_expired','expire_datetime','token')
 
 admin.site.register(User, UserAdmin)
+admin.site.register(UserDashboardInfo,UserDashboardInfoAdmin)
 admin.site.register(CreateCarpool,CreateCarpoolAdmin)
 admin.site.register(Booking,BookingAdmin)
 admin.site.register(Activity,ActivityAdmin) 

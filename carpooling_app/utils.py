@@ -6,7 +6,7 @@ from django.core.mail import send_mail
 from django.conf import settings
 from rest_framework.response import Response
 import requests
-from .models import Activity, Booking, CreateCarpool
+from .models import Activity, Booking, CreateCarpool, User
 from django.core.mail import EmailMultiAlternatives
 from django.utils.html import strip_tags
 from django.conf import settings
@@ -17,6 +17,7 @@ from django.db.models import Q
 from rest_framework import status
 from django.utils import timezone
 from datetime import timedelta
+from django.db.models import Sum
 
 def user_is_admin(user):
     """
@@ -270,12 +271,6 @@ def ride_status_function(request=None):
 def send_contact_email(name, email, phone_number, your_message):
     """
     Send an email to admin with contact form details.
-
-    Parameters:
-    name (str): Name of the user who submitted the contact form.
-    email (str): Email of the user who submitted the contact form.
-    phone_number (str): Phone number of the user who submitted the contact form.
-    your_message (str): Message from the user who submitted the contact form.
     """
     subject = "Contact us form"
     message = f"Name: {name}\nEmail: {email}\nPhone Number: {phone_number}\nMessage: {your_message}"
@@ -292,6 +287,28 @@ def validate_image(image):
     
     if image.size > 2 * 1024 * 1024:
         raise ValidationError("Image size should not exceed 2MB.")
+
+## calculate earning detail of user.
+def count_earning(user_id):
+    """
+    Calculate total earnings for a user from all completed bookings.
+    """
+    try:
+        user = User.objects.get(user_id=user_id)
+
+        total_earning = (Booking.objects.filter(carpool_driver_name__carpool_creator_driver=user,ride_status="completed").aggregate(total=Sum('contribution_amount'))['total'] 
+                         or 0)
+
+        user.earning = total_earning
+        user.save()
+        return total_earning
+
+    except User.DoesNotExist:
+        return 0
+    except Exception as e:
+        print("failed:", str(e))
+        return 0
+
 
 OSRM_BASE_URL = "http://router.project-osrm.org"  # public demo server; for production consider self-hosting
 

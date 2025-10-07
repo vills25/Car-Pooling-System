@@ -5,13 +5,20 @@ from .models import *
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['user_id', 'username', 'first_name', 'last_name','email', 'phone_number', 'profile_pic','role', 'is_active', 'address', 'gender']
+        fields = ['user_id', 'username', 'first_name', 'last_name','email', 'phone_number', 'profile_pic','role', 'is_active', 'address', 'gender', 'earning']
 
 ## User Detail serializer
 class UserDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['user_id', 'first_name']
+
+## User Dashboard Serializer
+class UserDashboardInfoSerializer(serializers.ModelSerializer):
+    user = serializers.CharField(source="user.first_name", read_only=True)
+    class Meta:
+        model = UserDashboardInfo
+        fields = ['user','total_carpools', 'total_bookings', 'total_earning']
 
 ## Carpool Serializer
 class CreateCarpoolSerializer(serializers.ModelSerializer):
