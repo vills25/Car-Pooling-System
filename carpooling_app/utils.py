@@ -362,8 +362,8 @@ def calculate_realistic_distance(lat1, lon1, lat2, lon2):
     float: Realistic distance between the two points in km
     """
     straight_distance = geodesic((lat1, lon1), (lat2, lon2)).km
-    # road factor ~1.2 (20% zyada)
-    return round(straight_distance * 1.2, 2)
+    # road factor ~1.0 (20% zyada)
+    return round(straight_distance * 1.0, 2)
 
 ## Calculate distance between two points, using geodesic library and haversine formula
 def calculate_distance(lat1, lon1, lat2, lon2):

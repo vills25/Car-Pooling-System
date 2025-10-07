@@ -22,7 +22,7 @@ class CreateCarpoolSerializer(serializers.ModelSerializer):
     class Meta:
         model = CreateCarpool
         fields = ['createcarpool_id', 'driver', 'driver_average_rating','carpool_ride_status','start_location', 'end_location','departure_time', 'arrival_time','available_seats', 'total_passenger_allowed','contribution_per_km', 
-                  'distance_km','add_note', 'allow_luggage','gender_preference','contact_info','car_model', 'car_number', 'created_at','updated_at', 'updated_by']
+                  'distance_km','add_note', 'allow_luggage','gender_preference','contact_info','car_model', 'car_number', 'is_ev_vehicle','created_at','updated_at', 'updated_by']
 
     def get_driver_average_rating(self, obj):
         from django.db.models import Avg
@@ -37,7 +37,7 @@ class CarpoolDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = CreateCarpool
         fields = ['createcarpool_id', 'carpool_driver_name','carpool_ride_status','start_location', 'end_location','departure_time', 'arrival_time','available_seats', 'total_passenger_allowed',
-                  'contribution_per_km', 'distance_km','add_note', 'contact_info', 'allow_luggage','car_model', 'car_number','updated_by']
+                  'contribution_per_km', 'distance_km','add_note', 'contact_info', 'allow_luggage','car_model', 'car_number','is_ev_vehicle','updated_by']
 
     def get_carpool_driver_name(self, obj):
         return obj.carpool_creator_driver.first_name if obj.carpool_creator_driver else None
@@ -46,6 +46,7 @@ class CarpoolDetailSerializer(serializers.ModelSerializer):
 class BookingSerializer(serializers.ModelSerializer):
     passenger = UserSerializer(source="passenger_name", read_only=True)
     carpool = CreateCarpoolSerializer(source="carpool_driver_name", read_only=True)
+    booked_by = serializers.CharField(source="booked_by.first_name", read_only=True)
     updated_by = serializers.CharField(source='updated_by.username', read_only=True)
     class Meta:
         model = Booking
@@ -57,6 +58,7 @@ class BookingDetailSerializer(serializers.ModelSerializer):
     passenger_name = serializers.SerializerMethodField()
     carpool_detail = CarpoolDetailSerializer(source="carpool_driver_name", read_only=True)
     updated_by = serializers.CharField(source='updated_by.username', read_only=True)
+    booked_by = serializers.CharField(source="booked_by.first_name", read_only=True)
     class Meta:
         model = Booking
         fields = ['booking_id', 'passenger_name', 'seat_book', 'distance_travelled', 'contribution_amount', 'payment_mode', 'booking_status', 'ride_status', 'booked_by', 'booked_at',
@@ -84,7 +86,7 @@ class ReviewRatingSerializer(serializers.ModelSerializer):
     review_given_to_name = serializers.CharField(source="review_for.username", read_only=True)
     carpool_id = serializers.IntegerField(source="carpool.createcarpool_id", read_only=True)
     booking_id = serializers.IntegerField(source="booking.booking_id", read_only=True)
-    updated_by = serializers.CharField(source='updated_by.username', read_only=True)
+    # updated_by = serializers.CharField(source='updated_by.username', read_only=True)
     class Meta:
         model = ReviewRating
-        fields = ["review_id", "review_given_by_name", "review_given_to_name","carpool_id","booking_id", "rating", "comment", "created_at", "updated_at", "updated_by"]
+        fields = ["review_id", "review_given_by_name", "review_given_to_name","carpool_id","booking_id", "rating", "comment"]

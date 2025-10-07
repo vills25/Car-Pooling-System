@@ -156,27 +156,32 @@ def sort_carpools_by(request):
         available_seats = request.data.get('available_seats')
         gender_preference = request.data.get('gender_preference')
         luggage = request.data.get("luggage_allowed")
+        prefer_ev_vehicle = request.data.get("prefer_ev_vehicle")
         
         if start_location:
-            queryset = queryset.filter(start_location__icontains=start_location)
+            queryset = queryset.filter(start_location__icontains = start_location)
 
         if end_location:
-            queryset = queryset.filter(end_location__icontains=end_location)
+            queryset = queryset.filter(end_location__icontains = end_location)
 
         if date:
-            queryset = queryset.filter(departure_time__icontains=date)
+            queryset = queryset.filter(departure_time__icontains = date)
 
         if luggage is not None:
             luggage_bool = str(luggage).lower() == "true"
-            queryset = queryset.filter(allow_luggage=luggage_bool)  
+            queryset = queryset.filter(allow_luggage = luggage_bool)  
 
         if gender_preference:
-            queryset = queryset.filter(gender_preference__iexact=gender_preference)
+            queryset = queryset.filter(gender_preference__iexact = gender_preference)
+
+        if prefer_ev_vehicle is not None:
+            prefer_ev_vehicle = str(prefer_ev_vehicle).lower() == "true"
+            queryset = queryset.filter(is_ev_vehicle = prefer_ev_vehicle)
 
         if available_seats:
             try:
                 seats = int(available_seats)
-                queryset = queryset.filter(available_seats__gte=seats) # equal or greter then entered seats
+                queryset = queryset.filter(available_seats__gte = seats) # equal or greter then entered seats
             except:
                 return Response({"status": "fail", "message": "available_seats must be an integer"}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -238,8 +243,8 @@ def find_nearby_carpools(request):
 
             distance_km = geodesic((user_lat, user_lon), (start_lat, start_lon)).km
 
-            # Filter within 20 KM radius
-            if distance_km <= 20:
+            # Filter within 10 KM radius
+            if distance_km <= 10:
                 carpool_data = CreateCarpoolSerializer(carpool).data
                 carpool_data["distance_from_you"] = f"{distance_km:.2f} KM"
                 carpool_data["distance_value"] = distance_km
@@ -306,6 +311,7 @@ def create_carpool(request):
     get_gender_preference = request.data.get('gender_preference')
     get_car_model = request.data.get('car_model')
     get_car_number = request.data.get('car_number')
+    get_is_ev_vehicle = request.data.get('is_ev_vehicle')
     # Optional cordinates fields
     get_latitude_start = request.data.get("latitude_start")
     get_longitude_start = request.data.get("longitude_start")
@@ -376,25 +382,26 @@ def create_carpool(request):
     try:
         with transaction.atomic():
             carpool = CreateCarpool.objects.create(
-                carpool_creator_driver=user,
-                start_location=get_start_location,
-                end_location=get_end_location,
-                latitude_start=float(get_latitude_start) if get_latitude_start else start_lat,
-                longitude_start=float(get_longitude_start) if get_longitude_start else start_lon,
-                latitude_end=float(get_latitude_end) if get_latitude_end else end_lat,
-                longitude_end=float(get_longitude_end) if get_longitude_end else end_lon,
-                departure_time=get_departure_time,
-                arrival_time=get_arrival_time,
-                available_seats=available_seats,
-                total_passenger_allowed=total_allowed,
-                contribution_per_km=get_contribution_per_km,
-                distance_km=distance_val,
-                add_note=get_add_note,
-                allow_luggage=get_allow_luggage,
-                gender_preference=get_gender_preference,
-                contact_info=get_contact_info,
-                car_model=get_car_model,
-                car_number=get_car_number,
+                carpool_creator_driver = user,
+                start_location = get_start_location,
+                end_location = get_end_location,
+                latitude_start = float(get_latitude_start) if get_latitude_start else start_lat,
+                longitude_start = float(get_longitude_start) if get_longitude_start else start_lon,
+                latitude_end = float(get_latitude_end) if get_latitude_end else end_lat,
+                longitude_end = float(get_longitude_end) if get_longitude_end else end_lon,
+                departure_time = get_departure_time,
+                arrival_time = get_arrival_time,
+                available_seats = available_seats,
+                total_passenger_allowed = total_allowed,
+                contribution_per_km = get_contribution_per_km,
+                distance_km = distance_val,
+                add_note = get_add_note,
+                allow_luggage = get_allow_luggage,
+                gender_preference = get_gender_preference,
+                contact_info = get_contact_info,
+                car_model = get_car_model,
+                car_number = get_car_number,
+                is_ev_vehicle = get_is_ev_vehicle
             )
 
             # Auto-assign driver role if not already
@@ -442,6 +449,7 @@ def update_carpool(request):
     get_contact_info = request.data.get("contact_info")
     get_car_model = request.data.get("car_model")
     get_car_number = request.data.get("car_number")
+    get_is_ev_vehicle = request.data.get("is_ev_vehicle")
     get_total_passenger_allowed = request.data.get("get_total_passenger_allowed")
 
     # Validate required field
@@ -496,6 +504,8 @@ def update_carpool(request):
             carpool.car_model = get_car_model
         if get_car_number is not None:
             carpool.car_number = get_car_number
+        if get_is_ev_vehicle is not None:
+            carpool.is_ev_vehicle = bool(get_is_ev_vehicle)
             
         # Handle total passengers with validation
         if get_total_passenger_allowed is not None:

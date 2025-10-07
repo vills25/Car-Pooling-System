@@ -38,6 +38,7 @@ class CreateCarpool(models.Model):
     contact_info = models.TextField(null=True, blank=True)
     car_model = models.CharField(max_length=50, null=True, blank=True) 
     car_number = models.CharField(max_length=20, null=True, blank=True) 
+    is_ev_vehicle = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
     updated_by = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name="updated_carpool")

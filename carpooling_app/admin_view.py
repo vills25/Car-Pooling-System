@@ -119,15 +119,15 @@ def admin_full_report(request):
         busiest_routes = CreateCarpool.objects.values("start_location", "end_location").annotate(count=Count("createcarpool_id")).order_by("-count")[:5]
 
         # Highest earner driver
-        highest_earner = Booking.objects.filter(booking_status="completed").values("carpool_driver_name__carpool_creator_driver__username").annotate(total_earnings=Sum("contribution_amount")).order_by("-total_earnings").first()
+        highest_earner = Booking.objects.filter(ride_status="completed").values("carpool_driver_name__carpool_creator_driver__username").annotate(total_earnings=Sum("contribution_amount")).order_by("-total_earnings").first()
 
         if highest_earner:
-            highest_earner_data = {"username": highest_earner["carpool_driver_name__carpool_creator_driver__username"], "amount": highest_earner["total_earnings"],}
+            highest_earner_data = {"username": highest_earner["carpool_driver_name__carpool_creator_driver__username"], "amount": highest_earner["total_earnings"]}
         else:
             highest_earner_data = {"username": None, "amount": 0}
 
         # Dashboard Stats
-        total_revenue = Booking.objects.filter(booking_status="completed").aggregate(total=Sum("contribution_amount")).get("total", 0)
+        total_revenue = Booking.objects.filter(ride_status="completed").aggregate(total=Sum("contribution_amount")).get("total", 0)
 
         active_drivers = User.objects.filter(role="driver", is_active=True).count()
 

@@ -1,4 +1,4 @@
-from rest_framework.permissions import AllowAny
+import re
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
@@ -8,14 +8,14 @@ from .custom_jwt_auth import IsAdminCustom, IsAuthenticatedCustom, IsDriverOrPas
 from .models import CreateCarpool, Booking, User, ReviewRating
 from .serializers import BookingDetailSerializer, BookingSerializer, ReviewRatingSerializer
 from .user_auth import activity
-from .utils import auto_calculate_distance, km_inr_format, ride_status_function, send_booking_email, get_road_distance_osrm, get_lat_lng_cached
+from .utils import *
 from django.core.mail import EmailMultiAlternatives
 from django.utils.html import strip_tags
 from django.db.models import Avg
 
 # Book a seat in carpool (Only Logged-in(Registered) user can book only available upcomming carpools)
 @api_view(['POST'])
-@permission_classes([IsDriverOrPassengerCustom, IsAdminCustom])
+@permission_classes([IsAuthenticatedCustom | IsAdminCustom])
 def book_carpool(request):
     """
     Book a seat in carpool.
@@ -60,17 +60,12 @@ def book_carpool(request):
             # If precise coordinates for pickup/drop given, use them
             if pickup_lat and pickup_lon and drop_lat and drop_lon:
                 try:
-                    distance_travelled = get_road_distance_osrm(
-                        float(pickup_lat), float(pickup_lon),
-                        float(drop_lat), float(drop_lon)
-                    )
+                    distance_travelled = get_road_distance_osrm(float(pickup_lat), float(pickup_lon),float(drop_lat), float(drop_lon))
                     if distance_travelled is None:
                         # fallback to old method if OSRM fails
-                        distance_travelled = auto_calculate_distance(
-                            pickup_location or "", drop_location or "",
-                            start_lat=float(pickup_lat), start_lon=float(pickup_lon),
-                            end_lat=float(drop_lat), end_lon=float(drop_lon)
-                        )
+                        distance_travelled = auto_calculate_distance( pickup_location or "", drop_location or "",
+                                                                start_lat = float(pickup_lat), start_lon=float(pickup_lon), end_lat = float(drop_lat), end_lon=float(drop_lon))
+
                 except Exception:
                     distance_travelled = 0.0
 
@@ -88,18 +83,16 @@ def book_carpool(request):
             else:
                 try:
                     carpool_obj = CreateCarpool.objects.get(pk=get_carpool_id)
-                    distance_travelled = get_road_distance_osrm(
-                        carpool_obj.latitude_start, carpool_obj.longitude_start,
-                        carpool_obj.latitude_end, carpool_obj.longitude_end
-                    )
+                    distance_travelled = get_road_distance_osrm(carpool_obj.latitude_start, carpool_obj.longitude_start, carpool_obj.latitude_end, carpool_obj.longitude_end)
+
                     if distance_travelled is None:
                         distance_travelled = auto_calculate_distance(
                             carpool_obj.start_location,
                             carpool_obj.end_location,
-                            start_lat=carpool_obj.latitude_start,
-                            start_lon=carpool_obj.longitude_start,
-                            end_lat=carpool_obj.latitude_end,
-                            end_lon=carpool_obj.longitude_end
+                            start_lat = carpool_obj.latitude_start,
+                            start_lon = carpool_obj.longitude_start,
+                            end_lat = carpool_obj.latitude_end,
+                            end_lon = carpool_obj.longitude_end
                         )
                 except CreateCarpool.DoesNotExist:
                     distance_travelled = 0.0
@@ -121,7 +114,6 @@ def book_carpool(request):
 
             if carpool.available_seats >= seat_book:
                 status_booking = "pending"
-                # carpool.available_seats -= seat_book
                 carpool.save()
                 message = "Booking request sent to driver"
             else:
@@ -130,16 +122,16 @@ def book_carpool(request):
 
             # Create booking
             booking = Booking.objects.create(
-                carpool_driver_name=carpool,
-                passenger_name=user,
-                seat_book=seat_book,
-                distance_travelled=distance_travelled,
-                payment_mode=payment_mode,
-                booked_by=user,
-                pickup_location=pickup_location,
-                drop_location=drop_location,
-                contact_info=contact_info,
-                booking_status=status_booking
+                carpool_driver_name = carpool,
+                passenger_name = user,
+                seat_book = seat_book,
+                distance_travelled = distance_travelled,
+                payment_mode = payment_mode,
+                booked_by = user,
+                pickup_location = pickup_location,
+                drop_location = drop_location,
+                contact_info = contact_info,
+                booking_status = status_booking
             )
 
             if user.role != "passenger":
@@ -160,7 +152,7 @@ def book_carpool(request):
 
 ## get booking info
 @api_view(['GET'])
-@permission_classes([IsDriverOrPassengerCustom, IsAdminCustom])
+@permission_classes([IsDriverOrPassengerCustom])
 def my_bookings_info(request):
     """
     Fetch booking information for a user.
@@ -171,8 +163,6 @@ def my_bookings_info(request):
     Returns:
     Response: A JSON response with the status, message and data of the bookings.
     The data contains two fields: "upcoming_bookings" and "past_bookings".
-    The "upcoming_bookings" field contains a list of upcoming bookings for the user,
-    and the "past_bookings" field contains a list of past bookings for the user.
     """
     user = request.user
     try:
@@ -193,7 +183,7 @@ def my_bookings_info(request):
 
 # Update booking (change seat count or pickup/drop)
 @api_view(['PUT'])
-@permission_classes([IsDriverOrPassengerCustom, IsAdminCustom])
+@permission_classes([IsDriverOrPassengerCustom])
 def update_my_booking(request):
     """
     Update booking information for a user.
@@ -259,7 +249,7 @@ def update_my_booking(request):
 
 ## cancel my bokked ride
 @api_view(['DELETE'])
-@permission_classes([IsDriverOrPassengerCustom, IsAdminCustom])
+@permission_classes([IsDriverOrPassengerCustom | IsAdminCustom ])
 def cancel_booking(request):
     """
     Cancel a booking.
@@ -320,7 +310,7 @@ def cancel_booking(request):
 
 ## sort/filter for user of his booking , like sort according to time, date, etc...
 @api_view(['POST'])
-@permission_classes([IsDriverOrPassengerCustom, IsAdminCustom])
+@permission_classes([IsDriverOrPassengerCustom])
 def filter_bookings(request):
     """
     Filter and sort bookings made by a user.
@@ -360,7 +350,7 @@ def filter_bookings(request):
 
 ## booking request from passenger view for driver role.
 @api_view(['GET'])
-@permission_classes([IsDriverCustom, IsAdminCustom])
+@permission_classes([IsDriverCustom])
 def driver_view_booking_requests(request):
     """
     Returns a list of all pending booking requests for a driver.
@@ -386,7 +376,7 @@ def driver_view_booking_requests(request):
 
 ## Approve/Reject booking request from passenger view for driver role.
 @api_view(['PUT'])
-@permission_classes([IsDriverCustom, IsAdminCustom])
+@permission_classes([IsDriverCustom])
 def driver_approve_reject_booking(request):
     """
     Approve or reject a booking request from a passenger.
@@ -452,7 +442,7 @@ def driver_approve_reject_booking(request):
     
 ## view each confirmed booking passenger for each carpool
 @api_view(['GET'])
-@permission_classes([IsDriverCustom, IsAdminCustom])
+@permission_classes([IsDriverCustom])
 def view_booked_passenger(request):
     """
     Returns a list of confirmed bookings for all carpools created by the requesting user (driver).
@@ -485,7 +475,7 @@ def view_booked_passenger(request):
 
 ## send email to passanger when ride is about to start before 40 minutes, if no journey is scheduled then return response as no upcoming rides.
 @api_view(['GET'])
-@permission_classes([IsDriverCustom, IsAdminCustom])
+@permission_classes([IsDriverCustom])
 def ride_reminder_notifications(request):
     """
       -  Send ride reminders to passengers 40 minutes before their scheduled departure time.
@@ -602,14 +592,6 @@ def ride_reminder_notifications(request):
 def give_review_rating(request):
     """
     Add review for a driver (review_given_by = request.user)
-    Expect JSON or form-data:
-    {
-      "review_for_username": "Mahesh",
-      "carpool_id": 1,
-      "booking_id": 3,
-      "rating": 5,
-      "comment": "Nice ride!"
-    }
     """
     user = request.user
     get_review_given_to_name = request.data.get("review_given_to_name")
@@ -619,7 +601,7 @@ def give_review_rating(request):
     get_comment = request.data.get("comment")
 
     # Required fields check
-    for key in ["review_for_username", "carpool_id", "booking_id", "rating"]:
+    for key in ["review_given_to_name", "carpool_id", "booking_id", "rating"]:
         if key not in request.data:
             return Response({"status":"fail","message": f"'{key}' is required"}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -651,8 +633,8 @@ def give_review_rating(request):
         review = ReviewRating.objects.create(
             review_given_by=user,
             review_for=review_for,
-            carpool=carpool,
-            booking=booking,
+            carpool_driver=carpool,
+            booking_person_name=booking,
             rating=rating,
             comment=get_comment
         )
@@ -677,7 +659,7 @@ def give_review_rating(request):
 @permission_classes([IsAuthenticatedCustom])
 def view_driver_info(request):
     """
-    Get driver info + stats + reviews
+    Get driver info
     Response:
     - driver_info: first_name, email, phone_number, address
     - total_carpools
