@@ -223,12 +223,11 @@ def user_dashboard(request):
     try:
         with transaction.atomic():
 
-            # --- Calculate metrics ---
             total_carpools = CreateCarpool.objects.filter(carpool_creator_driver=user).count()
-            total_bookings = Booking.objects.filter(carpool_driver_name__carpool_creator_driver=user).count()
+            total_bookings = Booking.objects.filter(Q(carpool_driver_name__carpool_creator_driver=user) | Q(passenger_name=user)).count()
             total_earning = count_earning(user.user_id)
 
-            # --- Update dashboard only if needed ---
+            # --- Update dashboard ---
             dashboard_data, created = UserDashboardInfo.objects.get_or_create(user=user)
             if (dashboard_data.total_carpools != total_carpools or
                 dashboard_data.total_bookings != total_bookings or
@@ -239,49 +238,46 @@ def user_dashboard(request):
                 dashboard_data.total_earning = total_earning
                 dashboard_data.save()
 
-        # --- Serialize main data ---
         dashboard_serialized = UserDashboardInfoSerializer(dashboard_data, context={'request': request})
         user_serialized = UserSerializer(user, context={'request': request})
 
-        # --- Prepare dynamic carpools list ---
+        # Carpool Details
         carpools_queryset = CreateCarpool.objects.filter(carpool_creator_driver=user)
         carpools_list = []
-        for carpool in carpools_queryset:
-            carpools_list.append({
-                "createcarpool_id": carpool.createcarpool_id,
-                "start_location": carpool.start_location,
-                "end_location": carpool.end_location,
-                "departure_time": carpool.departure_time,
-                "arrival_time": carpool.arrival_time,
-                "available_seats": carpool.available_seats,
-                "carpool_ride_status": carpool.carpool_ride_status,
-                "bookings_count": Booking.objects.filter(carpool_driver_name=carpool).count()
-            })
-
-        # --- Prepare dynamic bookings list ---
-        bookings_queryset = Booking.objects.filter(carpool_driver_name__carpool_creator_driver=user)
-        bookings_list = []
-        for booking in bookings_queryset:
-            bookings_list.append({
-                "booking_id": booking.booking_id,
-                "passenger_name": booking.passenger_name.username,
-                "carpool_id": booking.carpool_driver_name.createcarpool_id,
-                "start_location": booking.carpool_driver_name.start_location,
-                "end_location": booking.carpool_driver_name.end_location,
-                "booking_status": booking.booking_status,
-            })
-
-        # --- Dynamic message based on data ---
-        if total_carpools == 0:
-            message = "You haven't created any carpools yet."
-
-        elif total_bookings == 0:
-            message = "No bookings yet for your carpools."
-
+        if len(carpools_queryset) == 0:
+                carpools_list = "You didn't created any carpool ride yet."
         else:
-            message = "User dashboard data fetched successfully."
+            for carpool in carpools_queryset:
+                carpools_list.append({
+                    "createcarpool_id": carpool.createcarpool_id,
+                    "start_location": carpool.start_location,
+                    "end_location": carpool.end_location,
+                    "departure_time": carpool.departure_time,
+                    "arrival_time": carpool.arrival_time,
+                    "available_seats": carpool.available_seats,
+                    "carpool_ride_status": carpool.carpool_ride_status,
+                    "bookings_count": Booking.objects.filter(carpool_driver_name=carpool).count()
+                })
 
-        # --- Final response data ---
+        # Bookings Details
+        bookings_queryset = Booking.objects.filter(Q(carpool_driver_name__carpool_creator_driver=user) | Q(passenger_name=user)).distinct()
+        bookings_list = []
+
+        if len(bookings_queryset) == 0:
+                bookings_list = "You didn't booked any carpool ride yet."
+        else:
+            for booking in bookings_queryset:
+                role = "driver" if booking.carpool_driver_name.carpool_creator_driver == user else "passenger"
+                bookings_list.append({
+                    "booking_id": booking.booking_id,
+                    "role": role,
+                    "passenger_name": booking.passenger_name.username,
+                    "carpool_id": booking.carpool_driver_name.createcarpool_id,
+                    "start_location": booking.carpool_driver_name.start_location,
+                    "end_location": booking.carpool_driver_name.end_location,
+                    "booking_status": booking.booking_status,
+                })
+
         data = {
             "Overview": dashboard_serialized.data,
             "User": user_serialized.data,
@@ -289,7 +285,7 @@ def user_dashboard(request):
             "bookings": bookings_list
         }
 
-        return Response({"status": "success", "message": message, "data": {"Dashboard": data}},status=status.HTTP_200_OK)
+        return Response({"status": "success", "message": "User dashboard data fetched successfully.", "data": {"Dashboard": data}},status=status.HTTP_200_OK)
 
     except Exception as e:
         return Response({"status": "error", "message": str(e)},status=status.HTTP_400_BAD_REQUEST)
