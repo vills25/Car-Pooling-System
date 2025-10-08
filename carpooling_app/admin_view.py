@@ -1,3 +1,4 @@
+import os
 from django.db.models import Sum
 from datetime import timedelta
 from django.utils import timezone
@@ -6,9 +7,17 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
 from .user_auth import activity
-from .custom_jwt_auth import IsAdminCustom
-from .models import Activity, User, CreateCarpool, Booking
-from .serializers import ActivitySerializer, BookingDetailSerializer,UserSerializer, CreateCarpoolSerializer
+from .custom_jwt_auth import *
+from .models import *
+from .serializers import *
+
+import io, json
+from reportlab.lib.pagesizes import A4
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.units import cm
+from reportlab.lib.styles import ParagraphStyle
 
 
 ## View all User for admin view
@@ -160,3 +169,181 @@ def admin_full_report(request):
     
     except Exception as e:
         return Response({"status": "error", "message": str(e)},status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+EXPORT_DIR = r"C:\Users\ASUS\OneDrive\Desktop 1\Car-Pooling-System\export"
+os.makedirs(EXPORT_DIR, exist_ok=True)
+
+## User data Export
+@api_view(["POST"])
+@permission_classes([IsAdminCustom])
+def user_dashboard_report(request, ):
+    get_user_id = request.data.get("user_id")
+    if not get_user_id:
+        return Response({"status": "error", "message": "User ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        user = User.objects.get(user_id=get_user_id)
+        dashboard = UserDashboardInfo.objects.get(user=user)
+        carpools = CreateCarpool.objects.filter(carpool_creator_driver=user)
+        bookings = Booking.objects.filter(passenger_name=user)
+
+        # JSON Response Data
+        data = {
+            "status": "success",
+            "message": "User dashboard data fetched successfully.",
+            "data": {
+                "Dashboard": {
+                    "Overview": {
+                        "user": user.first_name,
+                        "total_carpools": dashboard.total_carpools,
+                        "total_bookings": dashboard.total_bookings,
+                        "total_earning": str(dashboard.total_earning)
+                    },
+                    "User": {
+                        "user_id": user.user_id,
+                        "username": user.username,
+                        "first_name": user.first_name,
+                        "last_name": user.last_name,
+                        "email": user.email,
+                        "phone_number": user.phone_number,
+                        "profile_pic": user.profile_pic.url if user.profile_pic else None,
+                        "role": user.role,
+                        "is_active": user.is_active,
+                        "address": user.address,
+                        "gender": user.gender,
+                        "earning": str(user.earning)
+                    },
+                    "carpools": [
+                        {
+                            "createcarpool_id": c.createcarpool_id,
+                            "start_location": c.start_location,
+                            "end_location": c.end_location,
+                            "departure_time": c.departure_time.strftime("%Y-%m-%d %H:%M:%S") if c.departure_time else None,
+                            "arrival_time": c.arrival_time.strftime("%Y-%m-%d %H:%M:%S") if c.arrival_time else None,
+                            "available_seats": c.available_seats,
+                            "carpool_ride_status": c.carpool_ride_status,
+                            "bookings_count": c.bookings.count(),
+                        } for c in carpools
+                    ],
+                    "bookings": [
+                        {
+                            "booking_id": b.booking_id,
+                            "role": "passenger",
+                            "passenger_name": b.passenger_name.username,
+                            "carpool_id": b.carpool_driver_name.createcarpool_id,
+                            "start_location": b.pickup_location,
+                            "end_location": b.drop_location,
+                            "booking_status": b.booking_status
+                        } for b in bookings
+                    ]
+                }
+            }
+        }
+
+         # JSON FILE DOWNLOAD
+        if request.data.get("format") == "json":
+            json_file_path = os.path.join(EXPORT_DIR, f"{user.username}_dashboard.json")
+            with open(json_file_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=4)
+
+            return Response({"status": "success","message": "JSON file successfully saved.","file_path": json_file_path}, status=status.HTTP_200_OK)
+
+        # Check format
+        if request.data.get("format", "").lower() == "pdf":
+            pdf_file_path = os.path.join(EXPORT_DIR, f"{user.username}_dashboard.pdf")
+            
+            buffer = io.BytesIO()
+            doc = SimpleDocTemplate(buffer, pagesize=A4)
+            styles = getSampleStyleSheet()
+            elements = []
+
+            # Title
+            elements.append(Paragraph(f"User Dashboard Report - {user.username}", styles['Title']))
+            elements.append(Spacer(1, 12))
+
+            # Overview Table
+            overview_data = [
+                ["User", "Total Carpools", "Total Bookings", "Total Earning"],
+                [user.first_name, dashboard.total_carpools, dashboard.total_bookings, str(dashboard.total_earning)]
+            ]
+            overview_table = Table(overview_data)
+            overview_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+            ]))
+            elements.append(Paragraph("Overview", styles['Heading2']))
+            elements.append(overview_table)
+            elements.append(Spacer(1, 20))
+
+            # Carpools Table
+            # Create a custom style for table cells
+            cell_style = ParagraphStyle(
+                'CellStyle',
+                parent=styles['Normal'],
+                fontSize=8,
+                leading=9,
+                alignment=1,
+            )
+
+            carpool_data = [["ID", "Start", "End", "Departure", "Arrival", "Status", "Bookings"]]
+            for c in carpools:
+                carpool_data.append([
+                    Paragraph(str(c.createcarpool_id), cell_style),
+                    Paragraph(c.start_location, cell_style),
+                    Paragraph(c.end_location, cell_style),
+                    Paragraph(c.departure_time.strftime("%Y-%m-%d %H:%M") if c.departure_time else "-", cell_style),
+                    Paragraph(c.arrival_time.strftime("%Y-%m-%d %H:%M") if c.arrival_time else "-", cell_style),
+                    Paragraph(c.carpool_ride_status, cell_style),
+                    Paragraph(str(c.bookings.count()), cell_style)
+                ])
+
+            if len(carpool_data) > 1:
+                col_widths = [1.2*cm, 4.5*cm, 4.5*cm, 2.5*cm, 2.5*cm, 2*cm, 1.8*cm]
+                carpool_table = Table(carpool_data, colWidths=col_widths, repeatRows=1)
+                carpool_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.darkblue),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+                    ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ]))
+                elements.append(Paragraph("Carpools", styles['Heading2']))
+                elements.append(carpool_table)
+                elements.append(Spacer(1, 20))
+
+            # Bookings Table
+            booking_data = [["ID", "Start", "End", "Status"]]
+            for b in bookings:
+                booking_data.append([
+                    b.booking_id,
+                    b.pickup_location or "-",
+                    b.drop_location or "-",
+                    b.booking_status
+                ])
+            if len(booking_data) > 1:
+                table = Table(booking_data)
+                table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.green),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ]))
+                elements.append(Paragraph("Bookings", styles['Heading2']))
+                elements.append(table)
+
+            # build and save to EXPORT_DIR
+            doc.build(elements)
+            with open(pdf_file_path, "wb") as f:
+                f.write(buffer.getvalue())
+
+            return Response({"status": "success", "message": "PDF file successfully saved.","file_path": pdf_file_path})
+        # Default JSON response
+        return Response(data)
+
+    except User.DoesNotExist:
+        return Response({"status": "error", "message": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+    
+    except UserDashboardInfo.DoesNotExist:
+        return Response({"status": "error", "message": "Dashboard info not found."}, status=status.HTTP_404_NOT_FOUND)

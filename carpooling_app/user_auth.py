@@ -244,6 +244,7 @@ def user_dashboard(request):
         # Carpool Details
         carpools_queryset = CreateCarpool.objects.filter(carpool_creator_driver=user)
         carpools_list = []
+        print("=======>>>>>>>>> LENGTH OF CARPOOL", len(carpools_queryset))
         if len(carpools_queryset) == 0:
                 carpools_list = "You didn't created any carpool ride yet."
         else:

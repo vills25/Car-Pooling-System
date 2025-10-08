@@ -10,7 +10,7 @@ class UserAdmin(admin.ModelAdmin):
     search_fields = ['username', 'email', 'first_name']
 
 class UserDashboardInfoAdmin(admin.ModelAdmin):
-    list_display = ('user', 'total_carpools', 'total_bookings', 'total_earning')
+    list_display = ('user', 'total_carpools', 'total_bookings', 'total_earning', 'updated_at')
     search_fields = ['user']
 
 class CreateCarpoolAdmin(admin.ModelAdmin):

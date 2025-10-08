@@ -26,6 +26,7 @@ urlpatterns = [
     path('admin/carpools/', admin_view_carpools),
     path('admin/carpool-bookings/', admin_view_bookings),
     path('admin/reports/', admin_full_report),
+    path('admin/user-dashboard-report/', user_dashboard_report),
 
     #-------- PUBLIC --------#
     path("carpool/detail/",carpool_detail), 
