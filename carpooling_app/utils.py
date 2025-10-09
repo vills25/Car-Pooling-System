@@ -68,37 +68,25 @@ def send_otp_email(email, otp):
 def km_inr_format(data):
     """
     Add INR and KM units to contribution_per_km and distance_km.
-    Parameters:
-    data (list or dict): The data to be formatted. If it is a list, all the items in it will be formatted.
-    Returns:
-    list or dict: The formatted data.
+    Works on list of dicts or nested dicts.
     """
-    # if isinstance(data, list):
-    #     for km_inr in data:
-    #         if km_inr.get("contribution_per_km"):
-    #             km_inr["contribution_per_km"] = f"{km_inr['contribution_per_km']} INR"
-    #         if km_inr.get("distance_km"):
-    #             km_inr["distance_km"] = f"{km_inr['distance_km']} KM"
-    #     return data
-    # return data
-
-    if isinstance(data, dict):
-        for key, value in data.items():
-            if isinstance(value, list):
-                for item in value:
-                    if item.get("contribution_per_km") is not None:
-                        item["contribution_per_km"] = f"{item['contribution_per_km']} INR"
-                    if item.get("distance_km") is not None:
-                        item["distance_km"] = f"{item['distance_km']} KM"
-            elif isinstance(value, dict):
-                data[key] = km_inr_format(value)
-        return data
-    elif isinstance(data, list):
+    if isinstance(data, list):
         for item in data:
             if isinstance(item, dict):
-                km_inr_format(item)
-        return data
+                if item.get("contribution_per_km") is not None:
+                    item["contribution_per_km"] = f"{item['contribution_per_km']} INR"
+                if item.get("distance_km") is not None:
+                    item["distance_km"] = f"{item['distance_km']} KM"
+                # recursively handle nested dicts if any
+                for key, value in item.items():
+                    if isinstance(value, dict) or isinstance(value, list):
+                        item[key] = km_inr_format(value)
+    elif isinstance(data, dict):
+        for key, value in data.items():
+            if isinstance(value, dict) or isinstance(value, list):
+                data[key] = km_inr_format(value)
     return data
+
 
 ## send Email for booking confirmed / rejected / waitlisted / cancelled
 def send_booking_email(booking, status_type):
@@ -201,10 +189,78 @@ def send_booking_email(booking, status_type):
         print("Email send failed:", e)
 
 ## Helper function for Ride status 
+# def ride_status_function(request=None):
+#     """
+#     Auto update ride + booking status for all carpools and bookings
+#     based on time, driver action, and passenger action.
+#     """
+#     current_time = timezone.now()
+#     carpools = CreateCarpool.objects.all()
+
+#     for carpool in carpools:
+#         start = carpool.departure_time
+#         end = carpool.arrival_time
+#         original_status = carpool.carpool_ride_status
+
+#         #  Not started yet but departure passed 
+#         if carpool.carpool_ride_status == "upcoming" and start <= current_time < end:
+#             carpool.carpool_ride_status = "not_started_yet"
+
+#         #  Ride cancelled, if not started by arrival time 
+#         elif carpool.carpool_ride_status in ["upcoming", "not_started_yet"] and current_time >= end:
+#             carpool.carpool_ride_status = "cancelled"
+
+#         #  Auto complete rides active but 1 hour past arrival 
+#         elif carpool.carpool_ride_status == "active" and current_time > (end + timedelta(hours=1)):
+#             carpool.carpool_ride_status = "auto_completed"
+
+#         #  Save only if changed
+#         if carpool.carpool_ride_status != original_status:
+#             carpool.save()
+
+#         #  Update all bookings 
+#         bookings = Booking.objects.filter(carpool_driver_name=carpool)
+#         for booking in bookings:
+#             # Passenger cancelled
+#             if booking.booking_status == "cancelled":
+#                 booking.ride_status = "cancelled"
+
+#             # Ride cancelled by driver/system
+#             elif carpool.carpool_ride_status == "cancelled":
+#                 if booking.booking_status in ["pending", "waitlisted", "confirmed"]:
+#                     booking.ride_status = "did_not_travelled"
+#                     booking.booking_status = "cancelled"
+
+#             # Ride active
+#             elif carpool.carpool_ride_status == "active":
+#                 booking.ride_status = "active"
+
+#             # Ride completed
+#             elif carpool.carpool_ride_status in ["completed", "auto_completed"]:
+#                 if booking.booking_status == "confirmed":
+#                     booking.ride_status = "completed"
+
+#                 elif booking.booking_status in ["pending", "waitlisted"]:
+#                     booking.ride_status = "did_not_travelled"
+#                     booking.booking_status = "cancelled"
+                    
+#             # Ride not started yet
+#             elif carpool.carpool_ride_status == "not_started_yet" and current_time > start:
+#                 if booking.booking_status in ["pending", "waitlisted", "confirmed"]:
+#                     booking.ride_status = "upcoming"
+
+#             # Upcoming
+#             elif current_time < start:
+#                 booking.ride_status = "upcoming"
+
+#             booking.save()
+
+
 def ride_status_function(request=None):
     """
     Auto update ride + booking status for all carpools and bookings
-    based on time, driver action, and passenger action.
+    based on current time, driver action, and passenger action.
+    Handles timezone safely and updates related bookings accordingly.
     """
     current_time = timezone.now()
     carpools = CreateCarpool.objects.all()
@@ -214,54 +270,61 @@ def ride_status_function(request=None):
         end = carpool.arrival_time
         original_status = carpool.carpool_ride_status
 
-        #  Not started yet but departure passed 
+        # Make timezone-aware if naive
+        if timezone.is_naive(start):
+            start = timezone.make_aware(start)
+        if timezone.is_naive(end):
+            end = timezone.make_aware(end)
+
+        # ========== STATUS LOGIC START ==========
+        # Between departure and arrival
         if carpool.carpool_ride_status == "upcoming" and start <= current_time < end:
             carpool.carpool_ride_status = "not_started_yet"
 
-        #  Ride cancelled, if not started by arrival time 
-        elif carpool.carpool_ride_status in ["upcoming", "not_started_yet"] and current_time >= end:
+        # Missed ride or not started even after arrival
+        elif carpool.carpool_ride_status in ["upcoming", "not_started_yet"] and current_time > end:
             carpool.carpool_ride_status = "cancelled"
 
-        #  Auto complete rides active but 1 hour past arrival 
+        # Ride active but not completed even after 1 hour past arrival
         elif carpool.carpool_ride_status == "active" and current_time > (end + timedelta(hours=1)):
             carpool.carpool_ride_status = "auto_completed"
 
-        #  Save only if changed
-        if carpool.carpool_ride_status != original_status:
+        # # Save only if something changed
+        # if carpool.carpool_ride_status != original_status:
             carpool.save()
 
-        #  Update all bookings 
+        # ========== UPDATE RELATED BOOKINGS ==========
         bookings = Booking.objects.filter(carpool_driver_name=carpool)
         for booking in bookings:
-            # Passenger cancelled
+
+            # Passenger manually cancelled
             if booking.booking_status == "cancelled":
                 booking.ride_status = "cancelled"
 
-            # Ride cancelled by driver/system
+            # System or driver cancelled
             elif carpool.carpool_ride_status == "cancelled":
                 if booking.booking_status in ["pending", "waitlisted", "confirmed"]:
                     booking.ride_status = "did_not_travelled"
                     booking.booking_status = "cancelled"
 
-            # Ride active
+            # Active ride
             elif carpool.carpool_ride_status == "active":
                 booking.ride_status = "active"
 
-            # Ride completed
+            # Completed / Auto-completed ride
             elif carpool.carpool_ride_status in ["completed", "auto_completed"]:
                 if booking.booking_status == "confirmed":
                     booking.ride_status = "completed"
-
                 elif booking.booking_status in ["pending", "waitlisted"]:
                     booking.ride_status = "did_not_travelled"
                     booking.booking_status = "cancelled"
-                    
-            # Ride not started yet
+
+            # Not started yet (already time crossed departure but not active)
             elif carpool.carpool_ride_status == "not_started_yet" and current_time > start:
                 if booking.booking_status in ["pending", "waitlisted", "confirmed"]:
                     booking.ride_status = "upcoming"
 
-            # Upcoming
+            # Future ride (hasn't started yet)
             elif current_time < start:
                 booking.ride_status = "upcoming"
 

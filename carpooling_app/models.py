@@ -72,7 +72,7 @@ class Booking(models.Model):
     contribution_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     payment_mode = models.CharField(max_length=10, choices=[("cash", "Cash"), ("upi", "UPI")], default="cash")
     booking_status = models.CharField(max_length=20,choices=[("pending", "Pending"),("confirmed", "Confirmed"),("rejected", "Rejected"),("cancelled", "Cancelled"),
-                                                             ("waitlisted", "Waitlisted"),],default="pending")
+                                                             ("waitlisted", "Waitlisted")],default="pending")
     ride_status = models.CharField(max_length=20, choices=[("upcoming", "Upcoming"), ("active", "Active"), ("completed", "Completed"), ("cancelled", "Cancelled"), ("did_not_travelled", "Did Not Travelled")], default="upcoming")
     booked_by = models.ForeignKey(User, on_delete=models.CASCADE)
     booked_at = models.DateTimeField(auto_now_add=True)

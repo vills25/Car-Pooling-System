@@ -183,9 +183,27 @@ def user_dashboard_report_export(request):
 
     try:
         user = User.objects.get(user_id=get_user_id)
-        dashboard = UserDashboardInfo.objects.get(user=user)
+        # dashboard = UserDashboardInfo.objects.get(user=user)
         carpools = CreateCarpool.objects.filter(carpool_creator_driver=user)
         bookings = Booking.objects.filter(passenger_name=user)
+        try:
+            dashboard = UserDashboardInfo.objects.get(user=user)
+        except:
+            total_carpools = CreateCarpool.objects.filter(carpool_creator_driver=user).count()
+            total_bookings = Booking.objects.filter(passenger_name=user).count()
+            
+            if user.role == "driver":
+                total_earning = CreateCarpool.objects.filter(carpool_creator_driver=user).aggregate(
+                    total=Sum("contribution_per_km"))["total"] or 0
+            else:
+                total_earning = 0
+
+            dashboard = UserDashboardInfo(
+                user=user,
+                total_carpools=total_carpools,
+                total_bookings=total_bookings,
+                total_earning=total_earning
+            )
 
         # JSON Response Data
         data = {
@@ -278,7 +296,6 @@ def user_dashboard_report_export(request):
             elements.append(Spacer(1, 20))
 
             # Carpools Table
-            # Create a custom style for table cells
             cell_style = ParagraphStyle(
                 'CellStyle',
                 parent=styles['Normal'],
@@ -313,24 +330,40 @@ def user_dashboard_report_export(request):
                 elements.append(Spacer(1, 20))
 
             # Bookings Table
-            booking_data = [["ID", "Start", "End", "Status"]]
+            booking_data = [["ID", "Role", "Carpool ID", "Start", "End", "Status"]]
+            cell_style = ParagraphStyle(
+                'BookingCell',
+                parent=styles['Normal'],
+                fontSize=8,
+                leading=9,
+                alignment=1, 
+            )
+
             for b in bookings:
                 booking_data.append([
-                    b.booking_id,
-                    b.pickup_location or "-",
-                    b.drop_location or "-",
-                    b.booking_status
+                    Paragraph(str(b.booking_id), cell_style),
+                    Paragraph(user.role, cell_style),
+                    Paragraph(str(b.carpool_driver_name.createcarpool_id) if b.carpool_driver_name else "-", cell_style),
+                    Paragraph(b.pickup_location or "-", cell_style),
+                    Paragraph(b.drop_location or "-", cell_style),
+                    Paragraph(b.booking_status, cell_style)
                 ])
+
             if len(booking_data) > 1:
-                table = Table(booking_data)
-                table.setStyle(TableStyle([
+                col_widths = [1.2*cm, 2.2*cm, 2.2*cm, 4.2*cm, 4.2*cm, 2.8*cm]
+
+                booking_table = Table(booking_data, colWidths=col_widths, repeatRows=1)
+                booking_table.setStyle(TableStyle([
                     ('BACKGROUND', (0, 0), (-1, 0), colors.green),
                     ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
                     ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
                     ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                    ('FONTSIZE', (0, 0), (-1, -1), 8),
+                    ('WORDWRAP', (0, 0), (-1, -1), True),
                 ]))
                 elements.append(Paragraph("Bookings", styles['Heading2']))
-                elements.append(table)
+                elements.append(booking_table)
 
             # build and save to EXPORT_DIR
             doc.build(elements)
@@ -338,7 +371,7 @@ def user_dashboard_report_export(request):
                 f.write(buffer.getvalue())
 
             return Response({"status": "success", "message": "PDF file successfully saved.","file_path": pdf_file_path})
-        # Default JSON response
+
         return Response(data)
 
     except User.DoesNotExist:

@@ -120,7 +120,8 @@ def search_carpools(request):
             return Response({"status": "fail", "message": "No carpools found"}, status=status.HTTP_404_NOT_FOUND)
 
         serializer = CreateCarpoolSerializer(final_results, many=True)
-        return Response({"status": "success","message": "Carpools fetched","data": {"Carpools": km_inr_format(serializer.data)}}, status=status.HTTP_200_OK)
+        formatted_data = km_inr_format(serializer.data)
+        return Response({"status": "success","message": "Carpools fetched","data": {"Carpools": formatted_data}}, status=status.HTTP_200_OK)
 
     except Exception as e:
         return Response({"status": "error", "message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
