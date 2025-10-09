@@ -10,7 +10,6 @@ from .user_auth import activity
 from .custom_jwt_auth import *
 from .models import *
 from .serializers import *
-
 import io, json
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
@@ -177,7 +176,7 @@ os.makedirs(EXPORT_DIR, exist_ok=True)
 ## User data Export
 @api_view(["POST"])
 @permission_classes([IsAdminCustom])
-def user_dashboard_report(request, ):
+def user_dashboard_report_export(request):
     get_user_id = request.data.get("user_id")
     if not get_user_id:
         return Response({"status": "error", "message": "User ID is required"}, status=status.HTTP_400_BAD_REQUEST)
@@ -264,10 +263,10 @@ def user_dashboard_report(request, ):
 
             # Overview Table
             overview_data = [
-                ["User", "Total Carpools", "Total Bookings", "Total Earning"],
-                [user.first_name, dashboard.total_carpools, dashboard.total_bookings, str(dashboard.total_earning)]
+                ["User ID","User", "Total Carpools", "Total Bookings", "Total Earning"],
+                [user.user_id,user.first_name, dashboard.total_carpools, dashboard.total_bookings, str(dashboard.total_earning)]
             ]
-            overview_table = Table(overview_data)
+            overview_table = Table(overview_data, colWidths=[70, 100, 100, 100, 100])
             overview_table.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
