@@ -255,45 +255,41 @@ def send_booking_email(booking, status_type):
 
 #             booking.save()
 
-
 def ride_status_function(request=None):
     """
-    Auto update ride + booking status for all carpools and bookings
+    Auto-update ride + booking status for all carpools and bookings
     based on current time, driver action, and passenger action.
-    Handles timezone safely and updates related bookings accordingly.
     """
     current_time = timezone.now()
-    carpools = CreateCarpool.objects.all()
+
+    # Consider only relevant carpools
+    carpools = CreateCarpool.objects.filter(carpool_ride_status__in=["upcoming", "active", "not_started_yet"])
 
     for carpool in carpools:
         start = carpool.departure_time
         end = carpool.arrival_time
         original_status = carpool.carpool_ride_status
 
-        # Make timezone-aware if naive
-        if timezone.is_naive(start):
-            start = timezone.make_aware(start)
-        if timezone.is_naive(end):
-            end = timezone.make_aware(end)
+        # Update carpool ride status
+        if current_time < start:
+            carpool.carpool_ride_status = "upcoming"
 
-        # ========== STATUS LOGIC START ==========
-        # Between departure and arrival
-        if carpool.carpool_ride_status == "upcoming" and start <= current_time < end:
-            carpool.carpool_ride_status = "not_started_yet"
+        elif start <= current_time < end:
+            carpool.carpool_ride_status = "active"
 
-        # Missed ride or not started even after arrival
-        elif carpool.carpool_ride_status in ["upcoming", "not_started_yet"] and current_time > end:
-            carpool.carpool_ride_status = "cancelled"
+        elif end <= current_time <= end + timedelta(hours=1):
+            if carpool.carpool_ride_status != "cancelled":
+                carpool.carpool_ride_status = "completed"
 
-        # Ride active but not completed even after 1 hour past arrival
-        elif carpool.carpool_ride_status == "active" and current_time > (end + timedelta(hours=1)):
-            carpool.carpool_ride_status = "auto_completed"
+        elif current_time > end + timedelta(hours=1):
+            if carpool.carpool_ride_status == "active":
+                carpool.carpool_ride_status = "auto_completed"
 
-        # # Save only if something changed
-        # if carpool.carpool_ride_status != original_status:
+        # Save only if status changed
+        if carpool.carpool_ride_status != original_status:
             carpool.save()
 
-        # ========== UPDATE RELATED BOOKINGS ==========
+        # Update related bookings
         bookings = Booking.objects.filter(carpool_driver_name=carpool)
         for booking in bookings:
 
@@ -301,31 +297,27 @@ def ride_status_function(request=None):
             if booking.booking_status == "cancelled":
                 booking.ride_status = "cancelled"
 
-            # System or driver cancelled
+            # Driver/system cancelled
             elif carpool.carpool_ride_status == "cancelled":
                 if booking.booking_status in ["pending", "waitlisted", "confirmed"]:
-                    booking.ride_status = "did_not_travelled"
                     booking.booking_status = "cancelled"
+                    booking.ride_status = "did_not_travelled"
 
-            # Active ride
+            # Ride active
             elif carpool.carpool_ride_status == "active":
-                booking.ride_status = "active"
+                if booking.booking_status in ["confirmed", "pending", "waitlisted"]:
+                    booking.ride_status = "active"
 
-            # Completed / Auto-completed ride
+            # Ride completed or auto-completed
             elif carpool.carpool_ride_status in ["completed", "auto_completed"]:
                 if booking.booking_status == "confirmed":
                     booking.ride_status = "completed"
-                elif booking.booking_status in ["pending", "waitlisted"]:
-                    booking.ride_status = "did_not_travelled"
+                else:
                     booking.booking_status = "cancelled"
+                    booking.ride_status = "did_not_travelled"
 
-            # Not started yet (already time crossed departure but not active)
-            elif carpool.carpool_ride_status == "not_started_yet" and current_time > start:
-                if booking.booking_status in ["pending", "waitlisted", "confirmed"]:
-                    booking.ride_status = "upcoming"
-
-            # Future ride (hasn't started yet)
-            elif current_time < start:
+            # Upcoming ride
+            elif carpool.carpool_ride_status == "upcoming":
                 booking.ride_status = "upcoming"
 
             booking.save()
@@ -372,7 +364,53 @@ def count_earning(user_id):
         print("failed:", str(e))
         return 0
 
+def calculate_passenger_trip_details(carpool, pickup_lat, pickup_lon, drop_lat, drop_lon):
+    """
+    Calculates passenger-specific trip details:
+    - waiting time (minutes)
+    - expected pickup/drop times
+    - distance travelled
+    - estimated fare
+    """
+    try:
+        start_lat, start_lon = carpool.latitude_start, carpool.longitude_start
+        end_lat, end_lon = carpool.latitude_end, carpool.longitude_end
 
+        # Total distance and duration of carpool
+        total_distance_km = geodesic((start_lat, start_lon), (end_lat, end_lon)).km
+        total_duration_min = (carpool.arrival_time - carpool.departure_time).total_seconds() / 60
+
+        # Distances for passenger
+        dist_start_to_pickup = geodesic((start_lat, start_lon), (pickup_lat, pickup_lon)).km
+        dist_pickup_to_drop = geodesic((pickup_lat, pickup_lon), (drop_lat, drop_lon)).km
+
+        # Time proportional to distance
+        time_start_to_pickup = (dist_start_to_pickup / total_distance_km) * total_duration_min
+        time_pickup_to_drop = (dist_pickup_to_drop / total_distance_km) * total_duration_min
+
+        waiting_time_min = round(time_start_to_pickup, 2)
+        expected_pickup_time = carpool.departure_time + timedelta(minutes=waiting_time_min)
+        expected_drop_time = expected_pickup_time + timedelta(minutes=time_pickup_to_drop)
+
+        contribution_per_km = float(carpool.contribution_per_km or 0)
+        estimated_fare = round(dist_pickup_to_drop * contribution_per_km, 2)
+
+        return {
+            "waiting_time_min": waiting_time_min,
+            "expected_pickup_time": expected_pickup_time.strftime("%d-%m-%Y %H:%M:%S"),
+            "expected_drop_time": expected_drop_time.strftime("%d-%m-%Y %H:%M:%S"),
+            "distance_travelled_km": round(dist_pickup_to_drop, 2),
+            "estimated_fare": estimated_fare
+        }
+    except Exception:
+        return {
+            "waiting_time_min": None,
+            "expected_pickup_time": None,
+            "expected_drop_time": None,
+            "distance_travelled_km": None,
+            "estimated_fare": None
+        }
+    
 OSRM_BASE_URL = "http://router.project-osrm.org"  # public demo server; for production consider self-hosting
 
 ## get location latitude and longitude from entered string

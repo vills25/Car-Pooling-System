@@ -58,6 +58,11 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 10,
     
     'DATETIME_FORMAT': "%d-%m-%Y %H:%M:%S",
+
+    'DEFAULT_THROTTLE_RATES': {
+    'login': '5/hour', 
+    'forgot_password': '3/minute',
+}
 }
 
 SIMPLE_JWT = {

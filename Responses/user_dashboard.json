@@ -1,1 +1,146 @@
-{"status":"error","message":"'Booking' object has no attribute 'fare'"}
+{
+  "status": "success",
+  "message": "User dashboard data fetched successfully.",
+  "data": {
+    "Dashboard": {
+      "Overview": {
+        "user": "Milan",
+        "total_carpools": 6,
+        "total_bookings": 6,
+        "total_earning": "318.32"
+      },
+      "User": {
+        "user_id": 17,
+        "username": "milan@15",
+        "first_name": "Milan",
+        "last_name": "Shah",
+        "email": "milan15@gmail.com",
+        "phone_number": "9859845869",
+        "profile_pic": "http://127.0.0.1:8000/media/profiles/20241206_wyCFRbh.jpg",
+        "role": "driver",
+        "is_active": true,
+        "address": "Ahmedabad",
+        "gender": null,
+        "earning": "318.32"
+      },
+      "carpools": [
+        {
+          "createcarpool_id": 105,
+          "start_location": "Ahmedabad Railway Station",
+          "end_location": "Ahmedabad Airport Circle",
+          "departure_time": "2025-10-02T15:45:00",
+          "arrival_time": "2025-10-02T16:16:00",
+          "available_seats": 2,
+          "carpool_ride_status": "cancelled",
+          "bookings_count": 1
+        },
+        {
+          "createcarpool_id": 106,
+          "start_location": "Ahmedabad Railway Station, Ahmedabad",
+          "end_location": "Shivalik High Street Mall, Satellite, Ahmedabad",
+          "departure_time": "2025-10-02T16:53:22",
+          "arrival_time": "2025-10-02T16:54:24",
+          "available_seats": 1,
+          "carpool_ride_status": "cancelled",
+          "bookings_count": 1
+        },
+        {
+          "createcarpool_id": 107,
+          "start_location": "Churchgate Railway Station, Mumbai",
+          "end_location": "Powai Lake, Hiranandani, Mumbai",
+          "departure_time": "2025-10-02T17:00:00",
+          "arrival_time": "2025-10-02T17:01:00",
+          "available_seats": 1,
+          "carpool_ride_status": "cancelled",
+          "bookings_count": 1
+        },
+        {
+          "createcarpool_id": 116,
+          "start_location": "ICAC Business Centre, Vesu, Surat",
+          "end_location": "Sahara Darwaja Textile Market, Ring Road, Surat",
+          "departure_time": "2025-10-06T18:26:04",
+          "arrival_time": "2025-10-06T18:50:00",
+          "available_seats": 2,
+          "carpool_ride_status": "completed",
+          "bookings_count": 1
+        },
+        {
+          "createcarpool_id": 131,
+          "start_location": "Surat People’s Bank Building, Nanpura, Surat",
+          "end_location": "Cafe Piano, Piplod, Surat",
+          "departure_time": "2025-10-09T21:10:00",
+          "arrival_time": "2025-10-09T21:35:00",
+          "available_seats": 2,
+          "carpool_ride_status": "auto_completed",
+          "bookings_count": 0
+        },
+        {
+          "createcarpool_id": 144,
+          "start_location": "Vallabh Vidyanagar, Anand",
+          "end_location": "Anand Railway Station",
+          "departure_time": "2025-10-10T19:15:00",
+          "arrival_time": "2025-10-10T19:40:00",
+          "available_seats": 3,
+          "carpool_ride_status": "upcoming",
+          "bookings_count": 2
+        }
+      ],
+      "bookings": [
+        {
+          "booking_id": 50,
+          "role": "driver",
+          "passenger_name": "harsh@14",
+          "carpool_id": 105,
+          "start_location": "Ahmedabad Railway Station",
+          "end_location": "Ahmedabad Airport Circle",
+          "booking_status": "cancelled"
+        },
+        {
+          "booking_id": 51,
+          "role": "driver",
+          "passenger_name": "harsh@14",
+          "carpool_id": 106,
+          "start_location": "Ahmedabad Railway Station, Ahmedabad",
+          "end_location": "Shivalik High Street Mall, Satellite, Ahmedabad",
+          "booking_status": "completed"
+        },
+        {
+          "booking_id": 52,
+          "role": "driver",
+          "passenger_name": "harsh@14",
+          "carpool_id": 107,
+          "start_location": "Churchgate Railway Station, Mumbai",
+          "end_location": "Powai Lake, Hiranandani, Mumbai",
+          "booking_status": "completed"
+        },
+        {
+          "booking_id": 65,
+          "role": "driver",
+          "passenger_name": "meet@13",
+          "carpool_id": 116,
+          "start_location": "ICAC Business Centre, Vesu, Surat",
+          "end_location": "Sahara Darwaja Textile Market, Ring Road, Surat",
+          "booking_status": "cancelled"
+        },
+        {
+          "booking_id": 71,
+          "role": "driver",
+          "passenger_name": "harsh@14",
+          "carpool_id": 144,
+          "start_location": "Vallabh Vidyanagar, Anand",
+          "end_location": "Anand Railway Station",
+          "booking_status": "pending"
+        },
+        {
+          "booking_id": 72,
+          "role": "driver",
+          "passenger_name": "harsh@14",
+          "carpool_id": 144,
+          "start_location": "Vallabh Vidyanagar, Anand",
+          "end_location": "Anand Railway Station",
+          "booking_status": "pending"
+        }
+      ]
+    }
+  }
+}

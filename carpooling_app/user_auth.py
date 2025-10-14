@@ -1,6 +1,6 @@
 from tokenize import TokenError
 from django.db.models import Q
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import AllowAny
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth.hashers import make_password, check_password
@@ -10,7 +10,7 @@ from django.db import transaction
 from django.utils import timezone
 from .models import *
 from .serializers import *
-from .custom_jwt_auth import IsAdminCustom, IsAuthenticatedCustom, IsDriverOrPassengerCustom
+from .custom_jwt_auth import IsAdminCustom, IsAuthenticatedCustom, IsDriverOrPassengerCustom,  LoginThrottle, ForgotPasswordThrottle
 from .utils import *
 
 ## Register User (Sign-Up)
@@ -93,6 +93,7 @@ def register_user(request):
 
 ## Login User (Sign-In)
 @api_view(['POST'])
+# @throttle_classes([LoginThrottle])
 @permission_classes([AllowAny])
 def login_user(request):
     """
@@ -194,6 +195,7 @@ def view_profile(request):
     If any error occurs, it will return a 400 status code with an error message.
     """
     user = request.user
+    ride_status_function(request)
 
     try:
         if not user:
@@ -216,6 +218,7 @@ def user_dashboard(request):
     user's carpools with extra details, and bookings with extra info.
     """
     user = request.user
+    ride_status_function(request)
 
     if not user :
         return Response({"status": "fail", "message": "User not found/exist"},status=status.HTTP_404_NOT_FOUND)
@@ -413,6 +416,7 @@ def delete_profile(request):
 
 ## FORGOT User password view
 @api_view(['POST'])
+# @throttle_classes([ForgotPasswordThrottle])
 @permission_classes([AllowAny])
 def forgot_password(request):
     
@@ -460,7 +464,6 @@ def reset_password(request):
     confirm_new_password (str): required, confirm new password of the user
 
     Returns:
-    Response: a json response with the status, message and data of the user.
     If the password reset is successful, it will return a 200 status code with a success message and the email id of the user.
     If the password reset fails, it will return a 404 status code with an error message if the user is not found, or a 400 status code with an error message if the OTP is invalid.
     """
@@ -470,7 +473,7 @@ def reset_password(request):
     confirm_password = request.data.get("confirm_new_password")
     new_password = check_password(raw_password, confirm_password)
 
-    if not email or not otp or not new_password:
+    if not email or not otp or not raw_password or not confirm_password:
         return Response({"status":"fail","message":"email, otp, new_password required"}, status=status.HTTP_400_BAD_REQUEST)
 
     try:

@@ -39,15 +39,19 @@ def carpool_detail(request):
     - If there are no public carpools available, it will return a 404 status code with a message "No carpools found".
     """
     try:
+        ride_status_function(request)
         current_time = timezone.now()
         public_carpools = CreateCarpool.objects.filter(departure_time__gte=current_time, available_seats__gt=0).order_by('-created_at')
 
-        serializer = CreateCarpoolSerializer(public_carpools, many=True)
-        return Response({ "status": "success", "message": "carpool details fetched", "data":{"Carpools details": km_inr_format(serializer.data)}}, status=status.HTTP_200_OK)
+        if len(public_carpools) != 0:
+            serializer = CreateCarpoolSerializer(public_carpools, many=True)
+            return Response({ "status": "success", "message": "carpool details fetched", "data":{"Carpools details": km_inr_format(serializer.data)}}, status=status.HTTP_200_OK)
+        else:
+            return Response({"status":"fail", "message": "No carpool published yet."}, status= status.HTTP_404_NOT_FOUND)
 
     except Exception as e:
         return Response({"status": "error", "message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
+ 
 # Search carpools (public) - show only upcoming rides with seats more than 0 , expired time ride hidden
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -573,7 +577,7 @@ def view_my_carpools(request):
     - Returns a JSON response with the status, message and data of the carpools.
     """
     user = request.user
-
+    ride_status_function(request)
     try:
         currunt_time = timezone.now()
         upcoming_carpool = CreateCarpool.objects.filter(carpool_creator_driver=user, departure_time__gte=currunt_time).order_by("departure_time")
@@ -582,8 +586,10 @@ def view_my_carpools(request):
             "upcoming_carpool": CreateCarpoolSerializer(upcoming_carpool, many=True).data,
             "past_carpool": CreateCarpoolSerializer(past_carpool, many=True).data
         }
-        
-        return Response({"status":"success","message":"Carpools data fetched", "Data":{"Carpools": km_inr_format(data)}}, status=status.HTTP_200_OK)
+        if len(data["upcoming_carpool"]) == 0 and len(data["past_carpool"]) == 0:
+            return Response({"status":"fail","message":"No carpools found"}, status=status.HTTP_404_NOT_FOUND)
+        else:
+            return Response({"status":"success","message":"Carpools data fetched", "Data":{"Carpools": km_inr_format(data)}}, status=status.HTTP_200_OK)
     
     except Exception as e:
         return Response({"status":"error","message": str(e)}, status=status.HTTP_400_BAD_REQUEST)

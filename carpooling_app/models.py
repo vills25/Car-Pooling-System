@@ -15,7 +15,7 @@ class User(models.Model):
     address = models.TextField(null=True, blank=True)
     gender = models.CharField(max_length=10, choices=[("male", "Male"), ("female", "Female"), ("other", "Other")], null=True, blank=True)
     earning = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-
+    
     def __str__(self):
         return f"{self.user_id} ({self.username})"
 
@@ -81,6 +81,10 @@ class Booking(models.Model):
     contact_info = models.TextField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
     updated_by = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name="updated_booking")
+    pickup_latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    pickup_longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    drop_latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    drop_longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
 
     def __str__(self):
         return self.passenger_name.username

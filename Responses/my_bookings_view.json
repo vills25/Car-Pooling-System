@@ -3,8 +3,221 @@
   "message": "Bookings fetched",
   "data": {
     "Bookings": {
-      "upcoming_bookings": [],
+      "upcoming_bookings": [
+        {
+          "booking_id": 71,
+          "passenger_name": "Harsh",
+          "seat_book": 1,
+          "distance_travelled": "2.74",
+          "contribution_amount": null,
+          "payment_mode": "cash",
+          "booking_status": "pending",
+          "ride_status": "upcoming",
+          "booked_by": "Harsh",
+          "booked_at": "10-10-2025 17:14:47",
+          "pickup_location": "Vallabh Vidyanagar, Anand",
+          "drop_location": "Anand Railway Station",
+          "contact_info": "9856985698",
+          "updated_at": "10-10-2025 17:20:40",
+          "carpool_detail": {
+            "createcarpool_id": 144,
+            "carpool_driver_name": "Milan",
+            "carpool_ride_status": "upcoming",
+            "start_location": "Vallabh Vidyanagar, Anand",
+            "end_location": "Anand Railway Station",
+            "departure_time": "10-10-2025 19:15:00",
+            "arrival_time": "10-10-2025 19:40:00",
+            "available_seats": 3,
+            "total_passenger_allowed": 3,
+            "contribution_per_km": "6.00",
+            "distance_km": "2.74",
+            "add_note": "Test route for students",
+            "contact_info": "9876011223",
+            "allow_luggage": true,
+            "car_model": "Maruti Swift",
+            "car_number": "GJ-23-SW-4422",
+            "is_ev_vehicle": false
+          }
+        }
+      ],
       "past_bookings": [
+        {
+          "booking_id": 70,
+          "passenger_name": "Harsh",
+          "seat_book": 1,
+          "distance_travelled": "18.10",
+          "contribution_amount": "162.90",
+          "payment_mode": "cash",
+          "booking_status": "confirmed",
+          "ride_status": "completed",
+          "booked_by": "Harsh",
+          "booked_at": "10-10-2025 10:40:55",
+          "pickup_location": "Sarthana Zoo Parking, Surat",
+          "drop_location": "LP Savani School, Pal, Surat",
+          "contact_info": "9856985698",
+          "updated_at": "10-10-2025 12:16:49",
+          "carpool_detail": {
+            "createcarpool_id": 135,
+            "carpool_driver_name": "Mahipal",
+            "carpool_ride_status": "auto_completed",
+            "start_location": "Sarthana Zoo Parking, Surat",
+            "end_location": "LP Savani School, Pal, Surat",
+            "departure_time": "10-10-2025 10:43:31",
+            "arrival_time": "10-10-2025 10:44:31",
+            "available_seats": 2,
+            "total_passenger_allowed": 3,
+            "contribution_per_km": "9.00",
+            "distance_km": "18.10",
+            "add_note": "Family ride, no pets please",
+            "contact_info": "9876543201",
+            "allow_luggage": true,
+            "car_model": "Hyundai Creta",
+            "car_number": "GJ-05-CT-5522",
+            "is_ev_vehicle": false,
+            "updated_by": "mahipal@10"
+          }
+        },
+        {
+          "booking_id": 67,
+          "passenger_name": "Harsh",
+          "seat_book": 1,
+          "distance_travelled": "10.70",
+          "contribution_amount": "74.90",
+          "payment_mode": "cash",
+          "booking_status": "confirmed",
+          "ride_status": "completed",
+          "booked_by": "Harsh",
+          "booked_at": "07-10-2025 15:49:51",
+          "pickup_location": "Green City Township, Pal, Surat",
+          "drop_location": "Veer Narmad South Gujarat University, Udhana Magdalla Road, Surat",
+          "contact_info": "9656985698",
+          "updated_at": "07-10-2025 15:57:46",
+          "carpool_detail": {
+            "createcarpool_id": 121,
+            "carpool_driver_name": "Pratham",
+            "carpool_ride_status": "completed",
+            "start_location": "Green City Township, Pal, Surat",
+            "end_location": "Veer Narmad South Gujarat University, Udhana Magdalla Road, Surat",
+            "departure_time": "07-10-2025 19:00:00",
+            "arrival_time": "07-10-2025 19:35:00",
+            "available_seats": 1,
+            "total_passenger_allowed": 2,
+            "contribution_per_km": "7.00",
+            "distance_km": "10.70",
+            "add_note": "Non-AC ride, quiet preferred",
+            "contact_info": "9845123456",
+            "allow_luggage": false,
+            "car_model": "Hyundai i20",
+            "car_number": "GJ-05-RT-9988",
+            "is_ev_vehicle": false
+          }
+        },
+        {
+          "booking_id": 66,
+          "passenger_name": "Harsh",
+          "seat_book": 1,
+          "distance_travelled": "8.03",
+          "contribution_amount": "64.24",
+          "payment_mode": "cash",
+          "booking_status": "cancelled",
+          "ride_status": "cancelled",
+          "booked_by": "Harsh",
+          "booked_at": "07-10-2025 11:51:04",
+          "pickup_location": "Adajan Pal RTO Circle, Surat",
+          "drop_location": "RahulRaj Mall, Dumas Road, Surat",
+          "contact_info": "8956985698",
+          "updated_at": "07-10-2025 11:51:54",
+          "carpool_detail": {
+            "createcarpool_id": 119,
+            "carpool_driver_name": "Pratham",
+            "carpool_ride_status": "cancelled",
+            "start_location": "Adajan Pal RTO Circle, Surat",
+            "end_location": "RahulRaj Mall, Dumas Road, Surat",
+            "departure_time": "07-10-2025 11:52:18",
+            "arrival_time": "07-10-2025 11:53:20",
+            "available_seats": 1,
+            "total_passenger_allowed": 2,
+            "contribution_per_km": "8.00",
+            "distance_km": "13.00",
+            "add_note": "AC ride, music allowed",
+            "contact_info": "9812234455",
+            "allow_luggage": true,
+            "car_model": "Tata Nexon",
+            "car_number": "GJ-05-MK-1199",
+            "is_ev_vehicle": false
+          }
+        },
+        {
+          "booking_id": 59,
+          "passenger_name": "Harsh",
+          "seat_book": 1,
+          "distance_travelled": "24.67",
+          "contribution_amount": "197.36",
+          "payment_mode": "cash",
+          "booking_status": "confirmed",
+          "ride_status": "completed",
+          "booked_by": "Harsh",
+          "booked_at": "06-10-2025 17:03:30",
+          "pickup_location": "Sarthana Nature Park & Zoo, Sarthana Jakatnaka, Surat",
+          "drop_location": "Surat Airport, Dumas Road, Surat",
+          "contact_info": "8965874589",
+          "updated_at": "06-10-2025 17:50:25",
+          "carpool_detail": {
+            "createcarpool_id": 115,
+            "carpool_driver_name": "Pratham",
+            "carpool_ride_status": "completed",
+            "start_location": "Sarthana Nature Park & Zoo, Sarthana Jakatnaka, Surat",
+            "end_location": "Surat Airport, Dumas Road, Surat",
+            "departure_time": "06-10-2025 17:11:00",
+            "arrival_time": "06-10-2025 17:17:00",
+            "available_seats": 2,
+            "total_passenger_allowed": 3,
+            "contribution_per_km": "8.00",
+            "distance_km": "26.23",
+            "add_note": "Non-AC, prefer quiet ride",
+            "contact_info": "9723456789",
+            "allow_luggage": true,
+            "car_model": "Hyundai i20",
+            "car_number": "GJ-05-CD-8899",
+            "is_ev_vehicle": false,
+            "updated_by": "pratham@3"
+          }
+        },
+        {
+          "booking_id": 58,
+          "passenger_name": "Harsh",
+          "seat_book": 1,
+          "distance_travelled": "10.08",
+          "contribution_amount": "70.56",
+          "payment_mode": "cash",
+          "booking_status": "confirmed",
+          "ride_status": "completed",
+          "booked_by": "Harsh",
+          "booked_at": "06-10-2025 14:43:58",
+          "pickup_location": "Surat Railway Station, Varachha Road, Surat",
+          "drop_location": "VR Mall, Dumas Road, Surat",
+          "contact_info": "8965874589",
+          "updated_at": "06-10-2025 17:50:25",
+          "carpool_detail": {
+            "createcarpool_id": 114,
+            "carpool_driver_name": "Pratham",
+            "carpool_ride_status": "completed",
+            "start_location": "Surat Railway Station, Varachha Road, Surat",
+            "end_location": "VR Mall, Dumas Road, Surat",
+            "departure_time": "06-10-2025 14:55:00",
+            "arrival_time": "06-10-2025 15:00:00",
+            "available_seats": 1,
+            "total_passenger_allowed": 2,
+            "contribution_per_km": "7.00",
+            "distance_km": "10.08",
+            "add_note": "AC available, can pick up on the way",
+            "contact_info": "9898989898",
+            "allow_luggage": true,
+            "car_model": "Maruti Suzuki Baleno",
+            "car_number": "GJ-05-AB-4421",
+            "is_ev_vehicle": false
+          }
+        },
         {
           "booking_id": 57,
           "passenger_name": "Harsh",
@@ -19,7 +232,7 @@
           "pickup_location": "MG Road Metro Station, Bangalore",
           "drop_location": "Whitefield ITPL, Bangalore",
           "contact_info": "9856985698",
-          "updated_at": "06-10-2025 11:16:43",
+          "updated_at": "06-10-2025 17:50:25",
           "carpool_detail": {
             "createcarpool_id": 113,
             "carpool_driver_name": "Pratham",
@@ -36,7 +249,8 @@
             "contact_info": "9876501234",
             "allow_luggage": true,
             "car_model": "Hyundai Creta",
-            "car_number": "KA-01-XY-6789"
+            "car_number": "KA-01-XY-6789",
+            "is_ev_vehicle": false
           }
         },
         {
@@ -53,7 +267,7 @@
           "pickup_location": "MG Road Metro Station, Bangalore",
           "drop_location": "Whitefield ITPL, Bangalore",
           "contact_info": "9856985698",
-          "updated_at": "06-10-2025 11:16:43",
+          "updated_at": "06-10-2025 17:50:25",
           "carpool_detail": {
             "createcarpool_id": 112,
             "carpool_driver_name": "Pratham",
@@ -70,7 +284,8 @@
             "contact_info": "9876501234",
             "allow_luggage": true,
             "car_model": "Hyundai Creta",
-            "car_number": "KA-01-XY-6789"
+            "car_number": "KA-01-XY-6789",
+            "is_ev_vehicle": false
           }
         },
         {
@@ -87,7 +302,7 @@
           "pickup_location": "MG Road Metro Station, Bangalore",
           "drop_location": "Whitefield ITPL, Bangalore",
           "contact_info": "9856985638",
-          "updated_at": "06-10-2025 11:16:43",
+          "updated_at": "06-10-2025 17:50:25",
           "carpool_detail": {
             "createcarpool_id": 110,
             "carpool_driver_name": "Pratham",
@@ -104,7 +319,8 @@
             "contact_info": "9876501234",
             "allow_luggage": true,
             "car_model": "Hyundai Creta",
-            "car_number": "KA-01-XY-6789"
+            "car_number": "KA-01-XY-6789",
+            "is_ev_vehicle": false
           }
         },
         {
@@ -121,7 +337,7 @@
           "pickup_location": "Churchgate Railway Station, Mumbai",
           "drop_location": "Powai Lake, Hiranandani, Mumbai",
           "contact_info": "8956589658",
-          "updated_at": "06-10-2025 11:16:43",
+          "updated_at": "06-10-2025 17:50:25",
           "carpool_detail": {
             "createcarpool_id": 107,
             "carpool_driver_name": "Milan",
@@ -138,7 +354,8 @@
             "contact_info": "9988776655",
             "allow_luggage": false,
             "car_model": "Toyota Glanza",
-            "car_number": "MH-01-AB-1122"
+            "car_number": "MH-01-AB-1122",
+            "is_ev_vehicle": false
           }
         },
         {
@@ -155,7 +372,7 @@
           "pickup_location": "Ahmedabad Railway Station, Ahmedabad",
           "drop_location": "Shivalik High Street Mall, Satellite, Ahmedabad",
           "contact_info": "8956589658",
-          "updated_at": "06-10-2025 11:16:43",
+          "updated_at": "06-10-2025 17:50:25",
           "carpool_detail": {
             "createcarpool_id": 106,
             "carpool_driver_name": "Milan",
@@ -172,7 +389,8 @@
             "contact_info": "9876543210",
             "allow_luggage": true,
             "car_model": "Maruti Suzuki Swift",
-            "car_number": "GJ01AB1234"
+            "car_number": "GJ01AB1234",
+            "is_ev_vehicle": false
           }
         },
         {
@@ -189,7 +407,7 @@
           "pickup_location": "Ahmedabad Railway Station",
           "drop_location": "Ahmedabad Airport Circle",
           "contact_info": "9569856324",
-          "updated_at": "06-10-2025 11:16:43",
+          "updated_at": "06-10-2025 17:50:25",
           "carpool_detail": {
             "createcarpool_id": 105,
             "carpool_driver_name": "Milan",
@@ -207,6 +425,7 @@
             "allow_luggage": false,
             "car_model": "Honda City",
             "car_number": "GJ01GH6789",
+            "is_ev_vehicle": false,
             "updated_by": "milan@15"
           }
         }

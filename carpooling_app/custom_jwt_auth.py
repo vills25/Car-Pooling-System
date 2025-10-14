@@ -4,6 +4,7 @@ from rest_framework import exceptions
 from rest_framework.permissions import BasePermission
 from carpooling_app.models import TokenBlacklistLogout, User
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework.throttling import UserRateThrottle
 
 # custome JWT configure
 class CustomJWTAuthentication(JWTAuthentication):
@@ -170,3 +171,11 @@ class IsDriverOrPassengerCustom(BasePermission):
             return False
 
         return True
+
+##----------- THROTTLE -----------##
+
+class LoginThrottle(UserRateThrottle):
+    scope = 'login'
+
+class ForgotPasswordThrottle(UserRateThrottle):
+    scope = 'forgot_password'
